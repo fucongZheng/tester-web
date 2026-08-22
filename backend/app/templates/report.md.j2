@@ -1,0 +1,79 @@
+# 测试报告：{{ title }}
+
+## 一、基本信息
+
+| 项目 | 版本 | 测试开始 | 计划上线 | 报告生成时间 | 生成方式 |
+| --- | --- | --- | --- | --- | --- |
+| {{ project_name }} | {{ version_no }} {{ version_name }} | {{ start_date }} | {{ launch_date }} | {{ generated_at }} | {{ method }} |
+
+## 二、需求覆盖
+
+- 需求总数：**{{ req_total }}**
+
+| 需求状态 | 数量 |
+| --- | --- |
+{% for k, v in req_status.items() %}
+| {{ k }} | {{ v }} |
+{% endfor %}
+
+## 三、测试用例执行情况
+
+- 用例总数：**{{ case_total }}**
+- 已执行：**{{ executed_total }}**，未执行：**{{ not_executed }}**
+- 通过率：**{{ pass_rate }}**
+
+| 执行结果 | 数量 | 占比 |
+| --- | --- | --- |
+{% for k, v in exec_result.items() %}
+| {{ k }} | {{ v }} | {{ exec_ratio[k] }} |
+{% endfor %}
+
+## 四、BUG 统计
+
+- BUG 总数：**{{ bug_total }}**
+
+### 按严重等级
+
+| 严重等级 | 数量 |
+| --- | --- |
+{% for k, v in bug_severity.items() %}
+| {{ k }} | {{ v }} |
+{% endfor %}
+
+### 按状态
+
+| 状态 | 数量 |
+| --- | --- |
+{% for k, v in bug_status.items() %}
+| {{ k }} | {{ v }} |
+{% endfor %}
+
+### 按模块
+
+| 模块 | 数量 |
+| --- | --- |
+{% for k, v in bug_module.items() %}
+| {{ k }} | {{ v }} |
+{% endfor %}
+
+### 按发现阶段
+
+| 发现阶段 | 数量 |
+| --- | --- |
+{% for k, v in bug_stage.items() %}
+| {{ k }} | {{ v }} |
+{% endfor %}
+
+## 五、测试流程进度
+
+- 当前环节：**{{ flow_stage }}**
+- 当前轮次：第 **{{ flow_round }}** 轮
+
+## 六、测试结论
+
+> （本节由 AI 或测试负责人填写）
+
+- 本次版本测试范围：____
+- 遗留问题：____
+- 是否达到上线标准：____
+- 建议：____
