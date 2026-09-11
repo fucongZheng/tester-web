@@ -1,11 +1,15 @@
 <template>
   <el-card>
     <div class="toolbar">
-      <el-select v-model="project_id" placeholder="项目" clearable filterable style="width:170px" @change="onProjectChange">
-        <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
-      </el-select>
-      <el-button type="primary" @click="load">查询</el-button>
-      <el-button type="success" @click="genDialog = true">AI 生成报告</el-button>
+      <div class="toolbar-filters">
+        <el-select v-model="project_id" placeholder="项目" clearable filterable style="width:170px" @change="onProjectChange">
+          <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+        </el-select>
+        <el-button type="primary" @click="load">查询</el-button>
+      </div>
+      <div class="toolbar-actions">
+        <el-button type="primary" @click="genDialog = true">一键生成报告</el-button>
+      </div>
     </div>
 
     <el-table :data="items" v-loading="loading" border stripe>
@@ -22,16 +26,15 @@
         <template #default="{ row }">
           <el-button link type="primary" @click="view(row)">查看</el-button>
           <el-button link type="success" @click="exportDocx(row)">导出</el-button>
-          <el-button link type="danger" @click="del(row)">删除</el-button>
+          <el-button v-if="isAdmin" link type="danger" @click="del(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-pagination class="pager" background layout="total, prev, pager, next" :total="total"
-      :page-size="size" :current-page="page" @current-change="(p) => { page = p; load() }" />
+    <Pager v-model:page="page" v-model:size="size" :total="total" @update:page="load" @update:size="load" />
 
     <!-- 生成 -->
-    <el-dialog v-model="genDialog" title="AI 生成测试报告" width="440px">
+    <el-dialog v-model="genDialog" title="一键生成测试报告" width="440px">
       <el-form label-width="80px">
         <el-form-item label="项目" required>
           <el-select v-model="genForm.project_id" style="width:100%" filterable @change="loadGenVersions">
@@ -59,9 +62,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { marked } from 'marked'
+import axios from 'axios'
 import request from '../../api/request'
+import { renderMarkdown } from '../../utils/sanitize'
+import Pager from '../../components/Pager.vue'
+import { useAdmin } from '../../composables/useAdmin'
 
+const { isAdmin } = useAdmin()
 const items = ref([]); const total = ref(0); const loading = ref(false)
 const projects = ref([]); const project_id = ref('')
 const page = ref(1); const size = ref(10)
@@ -86,7 +93,7 @@ async function doGenerate() {
   generating.value = true
   try {
     await request.post('/reports/generate', genForm.value)
-    ElMessage.success('报告已生成')
+    ElMessage.success('报告已根据系统数据生成')
     genDialog.value = false
     genForm.value = { project_id: '', version_id: '', title: '' }
     load()
@@ -95,11 +102,30 @@ async function doGenerate() {
 async function view(row) {
   const res = await request.get(`/reports/${row.id}`)
   viewReport.value = res
-  rendered.value = marked.parse(res.content || '')
+  rendered.value = renderMarkdown(res.content || '')
   viewDialog.value = true
 }
-function exportDocx(row) {
-  window.open(`/api/reports/${row.id}/export`, '_blank')
+async function exportDocx(row) {
+  try {
+    const token = localStorage.getItem('token') || ''
+    const res = await axios.get(`/api/reports/${row.id}/export`, {
+      responseType: 'blob',
+      headers: { Authorization: token ? `Bearer ${token}` : '' },
+    })
+    const blob = new Blob([res.data], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${row.title || row.report_no || '测试报告'}.docx`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '导出失败')
+  }
 }
 async function del(row) {
   await ElMessageBox.confirm(`确定删除报告「${row.title}」？`, '提示', { type: 'warning' })
@@ -109,7 +135,6 @@ onMounted(async () => { projects.value = await request.get('/projects/all'); loa
 </script>
 
 <style scoped>
-.toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
 .pager { margin-top: 14px; justify-content: flex-end; }
 .md-preview { max-height: 70vh; overflow: auto; padding: 8px; line-height: 1.7; }
 .md-preview :deep(table) { border-collapse: collapse; width: 100%; margin: 8px 0; }

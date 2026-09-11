@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import SysRole
-from ..deps import get_current_user
-from ..helpers import row_to_dict, paginate
+from ..models import SysRole, SysUser
+from ..deps import get_current_user, require_admin
+from ..helpers import row_to_dict, paginate, refuse_if_related
 
 router = APIRouter(prefix="/api/roles", tags=["角色管理"])
 
@@ -27,7 +27,7 @@ def list_roles(db: Session = Depends(get_db), _=Depends(get_current_user)):
 
 
 @router.post("")
-def create_role(payload: dict, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def create_role(payload: dict, db: Session = Depends(get_db), _=Depends(require_admin)):
     if db.query(SysRole).filter(SysRole.code == payload.get("code")).first():
         raise HTTPException(status_code=400, detail="角色编码已存在")
     r = SysRole(
@@ -42,7 +42,7 @@ def create_role(payload: dict, db: Session = Depends(get_db), _=Depends(get_curr
 
 
 @router.put("/{rid}")
-def update_role(rid: int, payload: dict, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def update_role(rid: int, payload: dict, db: Session = Depends(get_db), _=Depends(require_admin)):
     r = db.query(SysRole).filter(SysRole.id == rid).first()
     if not r:
         raise HTTPException(status_code=404, detail="角色不存在")
@@ -56,9 +56,11 @@ def update_role(rid: int, payload: dict, db: Session = Depends(get_db), _=Depend
 
 
 @router.delete("/{rid}")
-def delete_role(rid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def delete_role(rid: int, db: Session = Depends(get_db), _=Depends(require_admin)):
     r = db.query(SysRole).filter(SysRole.id == rid).first()
-    if r:
-        db.delete(r)
-        db.commit()
+    if not r:
+        raise HTTPException(status_code=404, detail="角色不存在")
+    refuse_if_related(db, [(SysUser, {"role_id": rid}, "用户")])
+    db.delete(r)
+    db.commit()
     return {"ok": True}

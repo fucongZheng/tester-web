@@ -35,3 +35,21 @@ def get_current_user_or_none(
     if not payload:
         return None
     return db.query(SysUser).filter(SysUser.id == int(payload["sub"])).first()
+
+
+def require_admin(user: SysUser = Depends(get_current_user)):
+    code = user.role.code if user.role else ""
+    if code != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return user
+
+
+def require_password(password: str, required: bool = True) -> str:
+    pwd = (password or "").strip()
+    if not pwd:
+        if required:
+            raise HTTPException(status_code=400, detail="密码不能为空")
+        return ""
+    if len(pwd) < 8:
+        raise HTTPException(status_code=400, detail="密码至少 8 位")
+    return pwd

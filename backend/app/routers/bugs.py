@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Bug
-from ..deps import get_current_user
-from ..helpers import row_to_dict, paginate, gen_code
+from ..models import Bug, BugShare
+from ..deps import get_current_user, require_admin
+from ..helpers import row_to_dict, paginate, gen_code, empty_to_none, strip_id_from_json_column, apply_module_filter
 
 router = APIRouter(prefix="/api/bugs", tags=["BUG"])
 
@@ -20,6 +20,7 @@ STAGES = ["第一轮测试", "第二轮测试", "回归测试", "线上溢出", 
 def list_bugs(page: int = 1, size: int = 10, keyword: str = "",
               project_id: int = 0, version_id: int = 0, module_id: int = 0,
               severity: str = "", status: str = "", found_stage: str = "",
+              assignee: str = "", fixer: str = "",
               db: Session = Depends(get_db), _=Depends(get_current_user)):
     q = db.query(Bug)
     if keyword:
@@ -28,14 +29,17 @@ def list_bugs(page: int = 1, size: int = 10, keyword: str = "",
         q = q.filter(Bug.project_id == project_id)
     if version_id:
         q = q.filter(Bug.version_id == version_id)
-    if module_id:
-        q = q.filter(Bug.module_id == module_id)
+    q = apply_module_filter(q, Bug, module_id)
     if severity:
         q = q.filter(Bug.severity == severity)
     if status:
         q = q.filter(Bug.status == status)
     if found_stage:
         q = q.filter(Bug.found_stage == found_stage)
+    if assignee:
+        q = q.filter(Bug.assignee == assignee)
+    if fixer:
+        q = q.filter(Bug.fixer == fixer)
     items, total = paginate(q.order_by(Bug.id.desc()), page, size)
     data = []
     for b in items:
@@ -50,7 +54,7 @@ def list_bugs(page: int = 1, size: int = 10, keyword: str = "",
 
 
 @router.get("/options")
-def bug_options():
+def bug_options(_=Depends(get_current_user)):
     return {"severity": SEVERITIES, "status": STATUSES, "stage": STAGES}
 
 
@@ -61,11 +65,13 @@ def create_bug(payload: dict, db: Session = Depends(get_db), cur=Depends(get_cur
     b = Bug(
         title=payload["title"], severity=payload.get("severity", "一般"),
         status=payload.get("status", "待处理"), project_id=payload["project_id"],
-        version_id=payload["version_id"], module_id=payload.get("module_id"),
-        requirement_id=payload.get("requirement_id"), case_id=payload.get("case_id"),
+        version_id=payload["version_id"], module_id=empty_to_none(payload.get("module_id")),
+        requirement_id=empty_to_none(payload.get("requirement_id")),
+        case_id=empty_to_none(payload.get("case_id")),
         found_stage=payload.get("found_stage", "第一轮测试"),
         submitter=payload.get("submitter") or cur.real_name or cur.username,
         assignee=payload.get("assignee", ""), fixer=payload.get("fixer", ""),
+        steps=payload.get("steps", ""),
         remark=payload.get("remark", ""),
     )
     db.add(b)
@@ -82,9 +88,10 @@ def update_bug(bid: int, payload: dict, db: Session = Depends(get_db), _=Depends
         raise HTTPException(status_code=404, detail="BUG不存在")
     for k in ("title", "severity", "status", "project_id", "version_id", "module_id",
               "requirement_id", "case_id", "found_stage", "submitter", "assignee",
-              "fixer", "remark"):
+              "fixer", "steps", "remark"):
         if k in payload:
-            setattr(b, k, payload[k])
+            val = empty_to_none(payload[k]) if k in ("module_id", "requirement_id", "case_id") else payload[k]
+            setattr(b, k, val)
     # 状态流转到“测试验证通过关闭”时记录关闭时间
     if payload.get("status") == "测试验证通过关闭" and not b.closed_at:
         b.closed_at = datetime.now()
@@ -93,9 +100,11 @@ def update_bug(bid: int, payload: dict, db: Session = Depends(get_db), _=Depends
 
 
 @router.delete("/{bid}")
-def delete_bug(bid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def delete_bug(bid: int, db: Session = Depends(get_db), _=Depends(require_admin)):
     b = db.query(Bug).filter(Bug.id == bid).first()
-    if b:
-        db.delete(b)
-        db.commit()
+    if not b:
+        raise HTTPException(status_code=404, detail="BUG不存在")
+    strip_id_from_json_column(db, BugShare, "bug_ids", bid)
+    db.delete(b)
+    db.commit()
     return {"ok": True}

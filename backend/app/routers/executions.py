@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Execution
-from ..deps import get_current_user
+from ..deps import get_current_user, require_admin
 from ..helpers import row_to_dict
 
 router = APIRouter(prefix="/api/executions", tags=["执行记录"])
@@ -28,7 +28,7 @@ def list_executions(case_id: int = 0, db: Session = Depends(get_db), _=Depends(g
 
 
 @router.get("/options")
-def exec_options():
+def exec_options(_=Depends(get_current_user)):
     return RESULTS
 
 
@@ -61,7 +61,7 @@ def update_execution(eid: int, payload: dict, db: Session = Depends(get_db), _=D
 
 
 @router.delete("/{eid}")
-def delete_execution(eid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def delete_execution(eid: int, db: Session = Depends(get_db), _=Depends(require_admin)):
     e = db.query(Execution).filter(Execution.id == eid).first()
     if e:
         db.delete(e)

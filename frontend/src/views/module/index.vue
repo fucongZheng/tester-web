@@ -1,10 +1,14 @@
 <template>
   <el-card>
     <div class="toolbar">
-      <el-select v-model="project_id" placeholder="选择项目" filterable style="width:220px" @change="load">
-        <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
-      </el-select>
-      <el-button type="success" :disabled="!project_id" @click="openDialog()">新增模块</el-button>
+      <div class="toolbar-filters">
+        <el-select v-model="project_id" placeholder="选择项目" filterable style="width:220px" @change="load">
+          <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+        </el-select>
+      </div>
+      <div class="toolbar-actions">
+        <el-button type="primary" :disabled="!project_id" @click="openDialog()">新增模块</el-button>
+      </div>
     </div>
 
     <el-table :data="tree" v-loading="loading" border row-key="id" default-expand-all
@@ -16,7 +20,7 @@
         <template #default="{ row }">
           <el-button link type="primary" @click="openDialog(null, row)">加子模块</el-button>
           <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="danger" @click="del(row)">删除</el-button>
+          <el-button v-if="isAdmin" link type="danger" @click="del(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -43,7 +47,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
+import { useAdmin } from '../../composables/useAdmin'
 
+const { isAdmin } = useAdmin()
 const projects = ref([])
 const tree = ref([])
 const loading = ref(false)
@@ -79,7 +85,3 @@ async function del(row) {
 }
 onMounted(async () => { projects.value = await request.get('/projects/all') })
 </script>
-
-<style scoped>
-.toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
-</style>

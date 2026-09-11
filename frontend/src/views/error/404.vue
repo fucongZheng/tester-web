@@ -7,7 +7,14 @@
 </template>
 
 <style scoped>
-.nf { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #909399; }
-.nf h1 { font-size: 64px; color: #c0c4cc; margin: 0 0 12px; }
+.nf {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-text-3);
+}
+.nf h1 { font-size: 64px; color: var(--c-orange-200); margin: 0 0 12px; font-weight: 700; }
 .nf p { margin-bottom: 24px; }
 </style>

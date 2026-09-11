@@ -85,6 +85,7 @@ class Version(Base):
     launch_date = Column(String(32), default="")
     status = Column(String(32), default="规划中")
     remark = Column(Text, default="")
+    review_minutes = Column(Text, default="")  # 需求评审纪要，必填
     project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
     created_at = Column(DateTime, default=now)
     updated_at = Column(DateTime, default=now, onupdate=now)
@@ -110,12 +111,14 @@ class Requirement(Base):
     id = Column(Integer, primary_key=True, index=True)
     req_no = Column(String(32), unique=True, default="")
     name = Column(String(255), nullable=False)
+    content = Column(Text, default="")  # 需求内容，长文本/富文本
     product_name = Column(String(64), default="")
     status = Column(String(32), default="待开发")  # 待开发/开发中/待测试/测试中/已验收/已上线
     priority = Column(String(8), default="P2")  # P0/P1/P2/P3
     project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
     version_id = Column(Integer, ForeignKey("version.id"), nullable=False)
     module_id = Column(Integer, ForeignKey("module.id"), nullable=True)
+    attachments = Column(Text, default="[]")  # JSON [{name,url,size}]
     created_at = Column(DateTime, default=now)
     updated_at = Column(DateTime, default=now, onupdate=now)
 
@@ -180,6 +183,7 @@ class Bug(Base):
     submitter = Column(String(64), default="")
     assignee = Column(String(64), default="")
     fixer = Column(String(64), default="")
+    steps = Column(Text, default="")  # 复现步骤（HTML 富文本）
     closed_at = Column(DateTime, nullable=True)
     remark = Column(Text, default="")
     created_at = Column(DateTime, default=now)
@@ -224,7 +228,8 @@ class FlowInstance(Base):
 
     project = relationship("Project", lazy="joined")
     version = relationship("Version", lazy="joined")
-    stages = relationship("FlowStage", lazy="selectin", order_by="FlowStage.id")
+    stages = relationship("FlowStage", lazy="selectin", order_by="FlowStage.id",
+                          cascade="all, delete-orphan")
 
 
 class FlowStage(Base):
@@ -239,3 +244,166 @@ class FlowStage(Base):
     finished_at = Column(DateTime, nullable=True)
     operator = Column(String(64), default="")
     remark = Column(String(255), default="")
+    attachments = Column(Text, default="[]")  # JSON [{name,url,size}]
+
+
+class Handover(Base):
+    """开发提测"""
+    __tablename__ = "handover"
+    id = Column(Integer, primary_key=True, index=True)
+    handover_no = Column(String(32), unique=True, default="")
+    project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
+    version_id = Column(Integer, ForeignKey("version.id"), nullable=False)
+    requirement_ids = Column(Text, default="[]")  # JSON 数组
+    module_id = Column(Integer, ForeignKey("module.id"), nullable=True)
+    branch = Column(Text, nullable=False, default="")
+    smoke_executed = Column(String(16), default="未执行")  # 已执行/未执行
+    suite_id = Column(Integer, ForeignKey("test_suite.id"), nullable=True)
+    tester_id = Column(Integer, ForeignKey("sys_user.id"), nullable=True)
+    tester_name = Column(String(64), default="")
+    remark = Column(Text, default="")
+    status = Column(String(16), default="待测试")  # 待测试/测试中/已完成
+    submitter = Column(String(64), default="")
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    project = relationship("Project", lazy="joined")
+    version = relationship("Version", lazy="joined")
+    module = relationship("Module", lazy="joined")
+    tester = relationship("SysUser", lazy="joined")
+
+
+class HandoverShare(Base):
+    """开发提测公开填写链接（免登录）"""
+    __tablename__ = "handover_share"
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    project_id = Column(Integer, nullable=True)
+    version_id = Column(Integer, nullable=True)
+    created_by = Column(String(64), default="")
+    created_at = Column(DateTime, default=now)
+    expires_at = Column(DateTime, nullable=True)
+
+
+class BugShare(Base):
+    """BUG 列表分享（公开链接，免登录）"""
+    __tablename__ = "bug_share"
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    title = Column(String(255), default="")
+    bug_ids = Column(Text, default="[]")  # JSON 数组
+    created_by = Column(String(64), default="")
+    created_at = Column(DateTime, default=now)
+    expires_at = Column(DateTime, nullable=True)
+
+
+class ReviewRecord(Base):
+    """需求评审 / 用例评审"""
+    __tablename__ = "review_record"
+    id = Column(Integer, primary_key=True, index=True)
+    review_no = Column(String(32), unique=True, default="")
+    review_type = Column(String(16), nullable=False)  # 需求评审 / 用例评审
+    title = Column(String(255), default="")
+    project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
+    version_id = Column(Integer, ForeignKey("version.id"), nullable=True)
+    module_id = Column(Integer, ForeignKey("module.id"), nullable=True)
+    target_ids = Column(Text, default="[]")  # 需求或用例 ID JSON
+    reviewer = Column(String(64), default="")
+    participants = Column(String(255), default="")
+    result = Column(String(16), default="待评审")  # 待评审/通过/有条件通过/不通过
+    comment = Column(Text, default="")
+    review_date = Column(String(32), default="")
+    created_by = Column(String(64), default="")
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    project = relationship("Project", lazy="joined")
+    version = relationship("Version", lazy="joined")
+    module = relationship("Module", lazy="joined")
+
+
+class TestSuite(Base):
+    """测试套件：冒烟 / 第一轮功能 / 回归 等"""
+    __tablename__ = "test_suite"
+    id = Column(Integer, primary_key=True, index=True)
+    suite_no = Column(String(32), unique=True, default="")
+    name = Column(String(128), nullable=False)
+    suite_type = Column(String(32), default="自定义")  # 冒烟/第一轮功能/回归/自定义
+    project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
+    version_id = Column(Integer, ForeignKey("version.id"), nullable=False)
+    module_id = Column(Integer, ForeignKey("module.id"), nullable=True)
+    case_ids = Column(Text, default="[]")
+    remark = Column(Text, default="")
+    created_by = Column(String(64), default="")
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    project = relationship("Project", lazy="joined")
+    version = relationship("Version", lazy="joined")
+    module = relationship("Module", lazy="joined")
+
+
+class LaunchRequest(Base):
+    """上线申请：流程第 6 环节卡点"""
+    __tablename__ = "launch_request"
+    id = Column(Integer, primary_key=True, index=True)
+    launch_no = Column(String(32), unique=True, default="")
+    title = Column(String(255), default="")
+    project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
+    version_id = Column(Integer, ForeignKey("version.id"), nullable=False)
+    module_id = Column(Integer, ForeignKey("module.id"), nullable=True)
+    plan_date = Column(String(32), default="")
+    content = Column(Text, default="")  # 上线内容 / 变更说明
+    applicant = Column(String(64), default="")
+    reviewer = Column(String(64), default="")
+    status = Column(String(16), default="待审批")  # 待审批/已通过/已驳回
+    remark = Column(Text, default="")
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    project = relationship("Project", lazy="joined")
+    version = relationship("Version", lazy="joined")
+    module = relationship("Module", lazy="joined")
+
+
+class ApiConfig(Base):
+    """AI / 中转站等 API 配置"""
+    __tablename__ = "api_config"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(128), nullable=False)
+    provider = Column(String(32), default="openai")  # openai / azure / 中转站 / custom
+    base_url = Column(String(255), default="")
+    api_key = Column(String(255), default="")
+    model = Column(String(128), default="")
+    enabled = Column(Integer, default=0)
+    remark = Column(String(255), default="")
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+
+class AiQaSession(Base):
+    """管理员 AI 问质会话"""
+    __tablename__ = "ai_qa_session"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("sys_user.id"), nullable=False)
+    title = Column(String(128), default="")
+    project_id = Column(Integer, ForeignKey("project.id"), nullable=True)
+    version_id = Column(Integer, ForeignKey("version.id"), nullable=True)
+    risk_level = Column(String(16), default="")  # green / yellow / red
+    created_at = Column(DateTime, default=now)
+    updated_at = Column(DateTime, default=now, onupdate=now)
+
+    project = relationship("Project", lazy="joined")
+    version = relationship("Version", lazy="joined")
+    messages = relationship("AiQaMessage", lazy="selectin", order_by="AiQaMessage.id",
+                            cascade="all, delete-orphan")
+
+
+class AiQaMessage(Base):
+    __tablename__ = "ai_qa_message"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("ai_qa_session.id"), nullable=False)
+    role = Column(String(16), nullable=False)  # user / assistant
+    content = Column(Text, default="")
+    snapshot = Column(Text, default="")  # 助手消息附带的质量快照 JSON
+    created_at = Column(DateTime, default=now)

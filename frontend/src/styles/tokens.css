@@ -1,0 +1,152 @@
+:root {
+  /* Brand */
+  --c-orange-50: #fff6ee;
+  --c-orange-100: #fbe4d2;
+  --c-orange-200: #f4c49c;
+  --c-orange-300: #eda270;
+  --c-orange-500: #f37021;
+  --c-orange-600: #c95a12;
+  --c-orange-700: #9a4308;
+
+  --c-blue-50: #f1f5f8;
+  --c-blue-100: #d7e2ea;
+  --c-blue-200: #a8bfcf;
+  --c-blue-400: #3a6b8c;
+  --c-blue-600: #2e5470;
+  --c-blue-700: #1f3d54;
+
+  --c-green-50: #f2f6f1;
+  --c-green-100: #d6e4d4;
+  --c-green-400: #6b9b7a;
+  --c-green-600: #527c5e;
+
+  --c-gold-50: #faf5e6;
+  --c-gold-100: #f0e1b6;
+  --c-gold-400: #d4a537;
+  --c-gold-600: #a8821f;
+
+  --c-danger-50: #fcefe6;
+  --c-danger-500: #e8843c;
+  --c-danger-600: #c76823;
+
+  /* Neutrals */
+  --c-text: #1f2933;
+  --c-text-2: #4a5563;
+  --c-text-3: #7a848b;
+  --c-text-4: #9aa0a6;
+  --c-border: #eceff3;
+  --c-border-2: #dde2e8;
+  --c-bg: #f5f7fa;
+  --c-bg-2: #fafbfc;
+  --c-bg-3: #ffffff;
+  --c-bg-4: #f8fafc;
+
+  /* Radius */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+
+  /* Shadow */
+  --sh-1: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --sh-2: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --sh-3: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --sh-4: 0 16px 48px rgba(15, 23, 42, 0.12);
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Element Plus mapping */
+  --el-color-primary: var(--c-orange-500);
+  --el-color-primary-light-3: var(--c-orange-300);
+  --el-color-primary-light-5: var(--c-orange-200);
+  --el-color-primary-light-7: var(--c-orange-100);
+  --el-color-primary-light-8: #fdeee3;
+  --el-color-primary-light-9: var(--c-orange-50);
+  --el-color-primary-dark-2: var(--c-orange-600);
+
+  --el-color-success: var(--c-green-400);
+  --el-color-success-light-3: #8fb399;
+  --el-color-success-light-5: var(--c-green-100);
+  --el-color-success-light-7: #e4eee3;
+  --el-color-success-light-8: #ebf2ea;
+  --el-color-success-light-9: var(--c-green-50);
+  --el-color-success-dark-2: var(--c-green-600);
+
+  --el-color-warning: var(--c-gold-400);
+  --el-color-warning-light-3: #e0bc6a;
+  --el-color-warning-light-5: var(--c-gold-100);
+  --el-color-warning-light-7: #f5edd4;
+  --el-color-warning-light-8: #f8f2de;
+  --el-color-warning-light-9: var(--c-gold-50);
+  --el-color-warning-dark-2: var(--c-gold-600);
+
+  --el-color-danger: var(--c-danger-500);
+  --el-color-danger-light-3: #eea36d;
+  --el-color-danger-light-5: #f5c4a0;
+  --el-color-danger-light-7: #f9dcc8;
+  --el-color-danger-light-8: #fbe6d7;
+  --el-color-danger-light-9: var(--c-danger-50);
+  --el-color-danger-dark-2: var(--c-danger-600);
+
+  --el-color-info: var(--c-blue-400);
+  --el-color-info-light-3: #6b8fa8;
+  --el-color-info-light-5: var(--c-blue-100);
+  --el-color-info-light-7: #e4ebf0;
+  --el-color-info-light-8: #ebf0f4;
+  --el-color-info-light-9: var(--c-blue-50);
+  --el-color-info-dark-2: var(--c-blue-600);
+
+  --el-color-error: var(--c-danger-500);
+  --el-color-error-light-3: var(--el-color-danger-light-3);
+  --el-color-error-light-5: var(--el-color-danger-light-5);
+  --el-color-error-light-7: var(--el-color-danger-light-7);
+  --el-color-error-light-8: var(--el-color-danger-light-8);
+  --el-color-error-light-9: var(--el-color-danger-light-9);
+  --el-color-error-dark-2: var(--el-color-danger-dark-2);
+
+  --el-text-color-primary: var(--c-text);
+  --el-text-color-regular: var(--c-text-2);
+  --el-text-color-secondary: var(--c-text-3);
+  --el-text-color-placeholder: var(--c-text-4);
+  --el-text-color-disabled: #b6bcc2;
+
+  --el-border-color: var(--c-border);
+  --el-border-color-light: var(--c-border);
+  --el-border-color-lighter: #f1f3f6;
+  --el-border-color-extra-light: #f6f8fa;
+  --el-border-color-dark: var(--c-border-2);
+  --el-border-color-darker: #cfd6de;
+
+  --el-bg-color: var(--c-bg-3);
+  --el-bg-color-page: var(--c-bg);
+  --el-bg-color-overlay: var(--c-bg-3);
+  --el-fill-color-blank: var(--c-bg-3);
+  --el-fill-color-light: var(--c-bg-4);
+  --el-fill-color-lighter: var(--c-bg-2);
+  --el-fill-color: var(--c-bg);
+
+  --el-border-radius-base: var(--r-sm);
+  --el-border-radius-small: var(--r-xs);
+  --el-border-radius-round: 20px;
+
+  --el-box-shadow: var(--sh-3);
+  --el-box-shadow-light: var(--sh-2);
+  --el-box-shadow-lighter: var(--sh-1);
+  --el-box-shadow-dark: var(--sh-4);
+
+  --el-font-family: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+  --el-font-size-base: 14px;
+
+  --el-menu-bg-color: var(--c-bg-2);
+  --el-menu-text-color: var(--c-text-2);
+  --el-menu-hover-bg-color: var(--c-blue-50);
+  --el-menu-hover-text-color: var(--c-blue-400);
+  --el-menu-active-color: var(--c-blue-600);
+}

@@ -2,8 +2,12 @@
 from pydantic_settings import BaseSettings
 
 
+WEAK_SECRET_KEYS = {"change-me-in-production", "please-change-this-secret"}
+
+
 class Settings(BaseSettings):
     APP_NAME: str = "测试管理系统"
+    ENV: str = "development"  # development | production
     # MySQL 连接串
     DATABASE_URL: str = "mysql+pymysql://root:123456@127.0.0.1:3306/tester?charset=utf8mb4"
     SECRET_KEY: str = "change-me-in-production"

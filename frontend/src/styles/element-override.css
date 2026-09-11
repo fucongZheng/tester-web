@@ -1,0 +1,169 @@
+/* Layout-agnostic Element Plus polish against GUIYI tokens */
+
+.el-button {
+  font-weight: 500;
+  border-radius: var(--r-sm);
+}
+.el-button--primary {
+  --el-button-hover-bg-color: var(--c-orange-600);
+  --el-button-hover-border-color: var(--c-orange-600);
+  --el-button-active-bg-color: var(--c-orange-700);
+  --el-button-active-border-color: var(--c-orange-700);
+}
+.el-button--success {
+  --el-button-hover-bg-color: var(--c-green-600);
+  --el-button-hover-border-color: var(--c-green-600);
+}
+.el-button--info {
+  --el-button-bg-color: var(--c-blue-400);
+  --el-button-border-color: var(--c-blue-400);
+  --el-button-hover-bg-color: var(--c-blue-600);
+  --el-button-hover-border-color: var(--c-blue-600);
+  --el-button-active-bg-color: var(--c-blue-700);
+  --el-button-active-border-color: var(--c-blue-700);
+}
+.el-button.is-disabled:not(.is-link):not(.el-button--text),
+.el-button.is-disabled:not(.is-link):not(.el-button--text):hover {
+  background: #f1f3f5 !important;
+  border-color: transparent !important;
+  color: #b6bcc2 !important;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--r-sm);
+  box-shadow: 0 0 0 1px var(--c-border-2) inset !important;
+}
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 2px var(--c-orange-500) inset, 0 0 0 4px rgba(243, 112, 33, 0.12) !important;
+}
+
+.el-card {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  box-shadow: none;
+  --el-card-padding: 20px;
+}
+.el-card__header {
+  border-bottom-color: var(--c-border);
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.el-table {
+  --el-table-header-bg-color: var(--c-bg-4);
+  --el-table-header-text-color: var(--c-blue-400);
+  --el-table-row-hover-bg-color: var(--c-orange-50);
+  --el-table-border-color: var(--c-border);
+  --el-table-text-color: var(--c-text);
+  font-size: 14px;
+}
+.el-table th.el-table__cell {
+  font-weight: 600;
+  height: 48px;
+}
+.el-table td.el-table__cell {
+  height: 52px;
+}
+
+.el-pagination.is-background .el-pager li.is-active {
+  background-color: var(--c-orange-500) !important;
+  color: #fff !important;
+}
+.el-pagination.is-background .btn-prev,
+.el-pagination.is-background .btn-next,
+.el-pagination.is-background .el-pager li {
+  border-radius: var(--r-sm);
+}
+
+.el-dialog {
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-4);
+}
+.el-dialog__header {
+  padding-bottom: 12px;
+  margin-right: 0;
+  border-bottom: 1px solid var(--c-border);
+}
+.el-dialog__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.el-dialog__footer {
+  border-top: 1px solid var(--c-border);
+  padding-top: 14px;
+}
+
+.el-drawer {
+  --el-drawer-padding-primary: 20px 24px;
+}
+.el-drawer__header {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.el-tag {
+  border-radius: var(--r-xs);
+  font-weight: 500;
+}
+
+.el-message-box {
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-4);
+}
+.el-message {
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-3);
+}
+
+.el-dropdown-menu {
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-3);
+  border-color: var(--c-border);
+}
+
+.el-tabs__item.is-active {
+  color: var(--c-orange-500);
+  font-weight: 600;
+}
+.el-tabs__active-bar {
+  background-color: var(--c-orange-500);
+  height: 2px;
+}
+
+.el-breadcrumb__inner a,
+.el-breadcrumb__inner.is-link {
+  color: var(--c-blue-400);
+  font-weight: 500;
+}
+
+/* Shared list toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.toolbar-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}

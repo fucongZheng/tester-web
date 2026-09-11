@@ -1,7 +1,9 @@
 <template>
   <el-card>
     <div class="toolbar">
-      <el-button type="success" @click="openDialog()">新增菜单</el-button>
+      <div class="toolbar-actions">
+        <el-button v-if="isAdmin" type="primary" @click="openDialog()">新增菜单</el-button>
+      </div>
     </div>
 
     <el-table :data="tree" v-loading="loading" border row-key="id" default-expand-all
@@ -18,9 +20,9 @@
       <el-table-column prop="sort" label="排序" width="70" />
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(null, row)">加子级</el-button>
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="danger" @click="del(row)">删除</el-button>
+          <el-button v-if="isAdmin" link type="primary" @click="openDialog(null, row)">加子级</el-button>
+          <el-button v-if="isAdmin" link type="primary" @click="openDialog(row)">编辑</el-button>
+          <el-button v-if="isAdmin" link type="danger" @click="del(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -56,6 +58,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
+import { useAdmin } from '../../composables/useAdmin'
+
+const { isAdmin } = useAdmin()
 
 const tree = ref([]); const loading = ref(false); const dialog = ref(false)
 const parentOptions = ref([]); const form = ref({})
@@ -85,7 +90,3 @@ async function del(row) {
 }
 onMounted(load)
 </script>
-
-<style scoped>
-.toolbar { margin-bottom: 14px; }
-</style>

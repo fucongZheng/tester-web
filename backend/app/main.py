@@ -2,13 +2,25 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import settings
-from .database import engine, SessionLocal
-from .models import Base, OperationLog
+from .config import WEAK_SECRET_KEYS, settings
+from .database import SessionLocal
+from .models import OperationLog
 from .routers import (auth, users, roles, menus, projects, versions, modules,
-                      requirements, cases, executions, bugs, flow, reports, dashboard)
+                      requirements, cases, case_import, executions, bugs, flow, reports, dashboard,
+                      handovers, shares, reviews, apiconfigs, logs, uploads, suites,
+                      launches, aiqa)
 
-app = FastAPI(title=settings.APP_NAME, version="1.0.0")
+_is_prod = (settings.ENV or "").lower() == "production"
+if _is_prod and (not settings.SECRET_KEY or settings.SECRET_KEY in WEAK_SECRET_KEYS or len(settings.SECRET_KEY) < 32):
+    raise RuntimeError("生产环境必须设置至少 32 位随机 SECRET_KEY，且不能使用默认值")
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    version="1.0.0",
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,7 +54,10 @@ async def op_log(request: Request, call_next):
 
 @app.get("/")
 def root():
-    return {"app": settings.APP_NAME, "docs": "/docs", "status": "ok"}
+    out = {"app": settings.APP_NAME, "status": "ok"}
+    if not _is_prod:
+        out["docs"] = "/docs"
+    return out
 
 
 @app.get("/api/health")
@@ -52,5 +67,9 @@ def health():
 
 # 注册路由
 for r in (auth, users, roles, menus, projects, versions, modules,
-          requirements, cases, executions, bugs, flow, reports, dashboard):
+          requirements, cases, case_import, executions, bugs, flow, reports, dashboard,
+          handovers, shares, reviews, apiconfigs, logs, uploads, suites,
+          launches, aiqa):
     app.include_router(r.router)
+
+# 附件走 /api/uploads/file/{name}，带安全 Content-Type，不再用 StaticFiles 裸挂目录

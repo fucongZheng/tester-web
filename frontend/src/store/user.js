@@ -6,6 +6,9 @@ export const useUserStore = defineStore('user', {
     user: JSON.parse(localStorage.getItem('user') || 'null'),
     menus: [],
   }),
+  getters: {
+    isAdmin: (state) => (state.user?.role_code || '') === 'admin',
+  },
   actions: {
     setLogin(token, user) {
       this.token = token

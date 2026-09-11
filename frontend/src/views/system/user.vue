@@ -1,9 +1,13 @@
 <template>
   <el-card>
     <div class="toolbar">
-      <el-input v-model="keyword" placeholder="搜索用户名/姓名" clearable style="width:200px" @keyup.enter="load" />
-      <el-button type="primary" @click="load">查询</el-button>
-      <el-button type="success" @click="openDialog()">新增用户</el-button>
+      <div class="toolbar-filters">
+        <el-input v-model="keyword" placeholder="搜索用户名/姓名" clearable style="width:200px" @keyup.enter="load" />
+        <el-button type="primary" @click="load">查询</el-button>
+      </div>
+      <div class="toolbar-actions">
+        <el-button v-if="isAdmin" type="primary" @click="openDialog()">新增用户</el-button>
+      </div>
     </div>
 
     <el-table :data="items" v-loading="loading" border stripe>
@@ -20,20 +24,19 @@
       <el-table-column prop="created_at" label="创建时间" width="160" />
       <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="danger" @click="del(row)">删除</el-button>
+          <el-button v-if="isAdmin" link type="primary" @click="openDialog(row)">编辑</el-button>
+          <el-button v-if="isAdmin" link type="danger" @click="del(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-pagination class="pager" background layout="total, prev, pager, next" :total="total"
-      :page-size="size" :current-page="page" @current-change="(p) => { page = p; load() }" />
+    <Pager v-model:page="page" v-model:size="size" :total="total" @update:page="load" @update:size="load" />
 
     <el-dialog v-model="dialog" :title="form.id ? '编辑用户' : '新增用户'" width="480px">
       <el-form :model="form" label-width="80px">
         <el-form-item label="账号" required><el-input v-model="form.username" :disabled="!!form.id" /></el-form-item>
         <el-form-item label="密码" :required="!form.id">
-          <el-input v-model="form.password" type="password" show-password :placeholder="form.id ? '留空则不修改' : '默认 123456'" />
+          <el-input v-model="form.password" type="password" show-password :placeholder="form.id ? '留空则不修改' : '至少 8 位'" />
         </el-form-item>
         <el-form-item label="姓名"><el-input v-model="form.real_name" /></el-form-item>
         <el-form-item label="邮箱"><el-input v-model="form.email" /></el-form-item>
@@ -61,7 +64,10 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
+import Pager from '../../components/Pager.vue'
+import { useAdmin } from '../../composables/useAdmin'
 
+const { isAdmin } = useAdmin()
 const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
 const roles = ref([]); const keyword = ref(''); const page = ref(1); const size = ref(10)
 const form = ref({})
@@ -79,6 +85,12 @@ function openDialog(row) {
 }
 async function save() {
   if (!form.value.username) return ElMessage.warning('请输入账号')
+  if (!form.value.id && (!form.value.password || form.value.password.length < 8)) {
+    return ElMessage.warning('密码至少 8 位')
+  }
+  if (form.value.id && form.value.password && form.value.password.length < 8) {
+    return ElMessage.warning('密码至少 8 位')
+  }
   if (form.value.id) await request.put(`/users/${form.value.id}`, form.value)
   else await request.post('/users', form.value)
   ElMessage.success('保存成功'); dialog.value = false; load()
@@ -91,6 +103,5 @@ onMounted(async () => { roles.value = (await request.get('/roles')).items; load(
 </script>
 
 <style scoped>
-.toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
 .pager { margin-top: 14px; justify-content: flex-end; }
 </style>

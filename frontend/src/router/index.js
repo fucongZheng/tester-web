@@ -15,6 +15,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'Login', component: () => import('../views/login/index.vue') },
+    { path: '/share/:token', name: 'BugShare', component: () => import('../views/share/index.vue'), meta: { public: true } },
+    { path: '/handover/share/:token', name: 'HandoverShare', component: () => import('../views/handover/share.vue'), meta: { public: true } },
     {
       path: '/',
       name: 'Layout',
@@ -27,6 +29,18 @@ const router = createRouter({
     { path: '/:pathMatch(.*)*', name: 'NotFound', component: () => import('../views/error/404.vue') },
   ],
 })
+
+export function firstMenuPath(menus) {
+  const walk = (nodes) => {
+    for (const m of nodes || []) {
+      if (m.type === 'menu' && m.path) return m.path
+      const child = walk(m.children)
+      if (child) return child
+    }
+    return ''
+  }
+  return walk(menus)
+}
 
 function buildRoutes(menus) {
   const routes = []
@@ -66,7 +80,7 @@ export function resetRoutes() {
 
 router.beforeEach(async (to) => {
   const userStore = useUserStore()
-  if (to.path === '/login') return true
+  if (to.path === '/login' || to.meta.public) return true
   if (!userStore.token) return '/login'
   // 兜底：动态路由尚未加载（如刷新时 bootstrap 未生效）则先加载
   if (!loaded) {
@@ -78,6 +92,14 @@ router.beforeEach(async (to) => {
     }
     // 加载后重新匹配一次目标路由
     return to.fullPath
+  }
+  const home = firstMenuPath(userStore.menus)
+  if ((to.path === '/' || to.path === '/dashboard') && !userStore.isAdmin) {
+    return home || '/login'
+  }
+  if (to.name === 'NotFound' && home && to.path !== home) {
+    const hit = router.getRoutes().some((r) => r.path === to.path && r.name !== 'NotFound')
+    if (!hit) return home
   }
   return true
 })

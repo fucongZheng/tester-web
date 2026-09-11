@@ -1,7 +1,9 @@
 <template>
   <el-card>
     <div class="toolbar">
-      <el-button type="success" @click="openDialog()">新增角色</el-button>
+      <div class="toolbar-actions">
+        <el-button v-if="isAdmin" type="primary" @click="openDialog()">新增角色</el-button>
+      </div>
     </div>
 
     <el-table :data="items" v-loading="loading" border stripe>
@@ -14,11 +16,12 @@
       </el-table-column>
       <el-table-column label="操作" width="140" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="danger" @click="del(row)">删除</el-button>
+          <el-button v-if="isAdmin" link type="primary" @click="openDialog(row)">编辑</el-button>
+          <el-button v-if="isAdmin" link type="danger" @click="del(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <Pager v-model:page="page" v-model:size="size" :total="allItems.length" />
 
     <el-dialog v-model="dialog" :title="form.id ? '编辑角色' : '新增角色'" width="520px">
       <el-form :model="form" label-width="80px">
@@ -42,17 +45,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
+import Pager from '../../components/Pager.vue'
+import { useAdmin } from '../../composables/useAdmin'
 
-const items = ref([]); const loading = ref(false); const dialog = ref(false)
+const { isAdmin } = useAdmin()
+const allItems = ref([]); const loading = ref(false); const dialog = ref(false)
 const menuTree = ref([]); const treeRef = ref()
 const form = ref({})
+const page = ref(1); const size = ref(10)
+const items = computed(() => {
+  const start = (page.value - 1) * size.value
+  return allItems.value.slice(start, start + size.value)
+})
 
 async function load() {
   loading.value = true
-  try { const res = await request.get('/roles'); items.value = res.items }
+  try { const res = await request.get('/roles'); allItems.value = res.items; page.value = 1 }
   finally { loading.value = false }
 }
 async function openDialog(row) {
@@ -76,7 +87,3 @@ async function del(row) {
 }
 onMounted(load)
 </script>
-
-<style scoped>
-.toolbar { margin-bottom: 14px; }
-</style>

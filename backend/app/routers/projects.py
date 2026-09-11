@@ -3,9 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Project
-from ..deps import get_current_user
-from ..helpers import row_to_dict, paginate
+from ..models import (Project, Version, Module, Requirement, TestCase, Bug,
+                      TestReport, FlowInstance, Handover, ReviewRecord, TestSuite)
+from ..deps import get_current_user, require_admin
+from ..helpers import row_to_dict, paginate, refuse_if_related
 
 router = APIRouter(prefix="/api/projects", tags=["项目"])
 
@@ -31,7 +32,7 @@ def all_projects(db: Session = Depends(get_db), _=Depends(get_current_user)):
 
 
 @router.get("/types")
-def project_types():
+def project_types(_=Depends(get_current_user)):
     return PROJECT_TYPES
 
 
@@ -69,9 +70,22 @@ def update_project(pid: int, payload: dict, db: Session = Depends(get_db), _=Dep
 
 
 @router.delete("/{pid}")
-def delete_project(pid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def delete_project(pid: int, db: Session = Depends(get_db), _=Depends(require_admin)):
     p = db.query(Project).filter(Project.id == pid).first()
-    if p:
-        db.delete(p)
-        db.commit()
+    if not p:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    refuse_if_related(db, [
+        (Version, {"project_id": pid}, "版本"),
+        (Module, {"project_id": pid}, "模块"),
+        (Requirement, {"project_id": pid}, "需求"),
+        (TestCase, {"project_id": pid}, "用例"),
+        (Bug, {"project_id": pid}, "BUG"),
+        (TestSuite, {"project_id": pid}, "测试套件"),
+        (Handover, {"project_id": pid}, "提测单"),
+        (ReviewRecord, {"project_id": pid}, "评审记录"),
+        (TestReport, {"project_id": pid}, "测试报告"),
+        (FlowInstance, {"project_id": pid}, "测试流程"),
+    ])
+    db.delete(p)
+    db.commit()
     return {"ok": True}

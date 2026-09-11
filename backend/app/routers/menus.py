@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import SysMenu
-from ..deps import get_current_user
+from ..deps import get_current_user, require_admin
 from ..helpers import row_to_dict, build_menu_tree
 
 router = APIRouter(prefix="/api/menus", tags=["菜单管理"])
@@ -17,7 +17,7 @@ def list_menus(db: Session = Depends(get_db), _=Depends(get_current_user)):
 
 
 @router.post("")
-def create_menu(payload: dict, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def create_menu(payload: dict, db: Session = Depends(get_db), _=Depends(require_admin)):
     m = SysMenu(
         parent_id=payload.get("parent_id", 0), name=payload.get("name"),
         type=payload.get("type", "menu"), path=payload.get("path", ""),
@@ -31,7 +31,7 @@ def create_menu(payload: dict, db: Session = Depends(get_db), _=Depends(get_curr
 
 
 @router.put("/{mid}")
-def update_menu(mid: int, payload: dict, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def update_menu(mid: int, payload: dict, db: Session = Depends(get_db), _=Depends(require_admin)):
     m = db.query(SysMenu).filter(SysMenu.id == mid).first()
     if not m:
         raise HTTPException(status_code=404, detail="菜单不存在")
@@ -43,7 +43,7 @@ def update_menu(mid: int, payload: dict, db: Session = Depends(get_db), _=Depend
 
 
 @router.delete("/{mid}")
-def delete_menu(mid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def delete_menu(mid: int, db: Session = Depends(get_db), _=Depends(require_admin)):
     if db.query(SysMenu).filter(SysMenu.parent_id == mid).first():
         raise HTTPException(status_code=400, detail="请先删除子菜单")
     m = db.query(SysMenu).filter(SysMenu.id == mid).first()

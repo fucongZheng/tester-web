@@ -19,3 +19,8 @@ Thumbs.db
 
 # 临时文件
 *.png
+
+# 运行时/会话临时目录
+.tmp-*/
+.playwright-cli/
+/backend/uploads/

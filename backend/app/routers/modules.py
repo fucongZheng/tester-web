@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Module
-from ..deps import get_current_user
+from ..models import Module, Requirement, TestCase, Bug, Handover, TestSuite, ReviewRecord, LaunchRequest
+from ..deps import get_current_user, require_admin
 from ..helpers import row_to_dict
 
 router = APIRouter(prefix="/api/modules", tags=["模块"])
@@ -65,11 +65,26 @@ def update_module(mid: int, payload: dict, db: Session = Depends(get_db), _=Depe
 
 
 @router.delete("/{mid}")
-def delete_module(mid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def delete_module(mid: int, db: Session = Depends(get_db), _=Depends(require_admin)):
     if db.query(Module).filter(Module.parent_id == mid).first():
         raise HTTPException(status_code=400, detail="请先删除子模块")
     m = db.query(Module).filter(Module.id == mid).first()
-    if m:
-        db.delete(m)
-        db.commit()
+    if not m:
+        raise HTTPException(status_code=404, detail="模块不存在")
+    db.query(Requirement).filter(Requirement.module_id == mid).update(
+        {Requirement.module_id: None}, synchronize_session=False)
+    db.query(TestCase).filter(TestCase.module_id == mid).update(
+        {TestCase.module_id: None}, synchronize_session=False)
+    db.query(Bug).filter(Bug.module_id == mid).update(
+        {Bug.module_id: None}, synchronize_session=False)
+    db.query(Handover).filter(Handover.module_id == mid).update(
+        {Handover.module_id: None}, synchronize_session=False)
+    db.query(TestSuite).filter(TestSuite.module_id == mid).update(
+        {TestSuite.module_id: None}, synchronize_session=False)
+    db.query(ReviewRecord).filter(ReviewRecord.module_id == mid).update(
+        {ReviewRecord.module_id: None}, synchronize_session=False)
+    db.query(LaunchRequest).filter(LaunchRequest.module_id == mid).update(
+        {LaunchRequest.module_id: None}, synchronize_session=False)
+    db.delete(m)
+    db.commit()
     return {"ok": True}

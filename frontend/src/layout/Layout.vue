@@ -1,14 +1,17 @@
 <template>
-  <el-container style="height: 100%">
-    <el-aside width="220px" class="aside">
-      <div class="logo">🧪 测试管理系统</div>
+  <el-container class="app-shell">
+    <el-aside width="240px" class="aside">
+      <div class="brand">
+        <span class="brand-mark">测</span>
+        <div class="brand-text">
+          <div class="brand-name">测试管理系统</div>
+          <div class="brand-sub">Test Manager</div>
+        </div>
+      </div>
       <el-menu
         :default-active="$route.path"
         router
-        background-color="#001529"
-        text-color="#c0c4cc"
-        active-text-color="#fff"
-        style="border-right: none"
+        class="side-menu"
       >
         <template v-for="m in userStore.menus" :key="m.id">
           <el-sub-menu v-if="m.children && m.children.length" :index="m.path || String(m.id)">
@@ -32,9 +35,9 @@
         <div class="page-title">{{ $route.meta.title || '' }}</div>
         <el-dropdown @command="onCommand">
           <span class="user">
-            <el-avatar :size="28" style="background:#409eff">{{ (userStore.user?.real_name || 'U')[0] }}</el-avatar>
-            <span style="margin-left:8px">{{ userStore.user?.real_name || userStore.user?.username }}</span>
-            <el-icon style="margin-left:4px"><ArrowDown /></el-icon>
+            <el-avatar :size="32" class="user-avatar">{{ (userStore.user?.real_name || 'U')[0] }}</el-avatar>
+            <span class="user-name">{{ userStore.user?.real_name || userStore.user?.username }}</span>
+            <el-icon class="user-caret"><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
@@ -66,10 +69,88 @@ async function onCommand(cmd) {
 </script>
 
 <style scoped>
-.aside { background: #001529; }
-.logo { height: 60px; line-height: 60px; color: #fff; font-size: 16px; font-weight: 600; text-align: center; }
-.header { background: #fff; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 4px rgba(0,21,41,.08); }
-.page-title { font-size: 16px; font-weight: 600; color: #303133; }
-.user { display: flex; align-items: center; cursor: pointer; color: #303133; }
-.main { background: #f0f2f5; }
+.app-shell { height: 100%; }
+.aside {
+  background: var(--c-bg-2);
+  border-right: 1px solid var(--c-border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.brand {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--c-border);
+  flex-shrink: 0;
+}
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--c-orange-500), var(--c-gold-400));
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.brand-name { font-size: 15px; font-weight: 600; color: var(--c-text); line-height: 1.2; }
+.brand-sub { font-size: 11px; color: var(--c-text-3); margin-top: 2px; }
+
+.side-menu {
+  border-right: none;
+  background: transparent;
+  padding: 12px 8px 24px;
+  flex: 1;
+}
+.side-menu :deep(.el-menu-item),
+.side-menu :deep(.el-sub-menu__title) {
+  height: 44px;
+  line-height: 44px;
+  border-radius: var(--r-sm);
+  margin: 2px 0;
+  color: var(--c-text-2);
+}
+.side-menu :deep(.el-sub-menu__title) {
+  color: var(--c-blue-400);
+  font-weight: 600;
+  font-size: 13px;
+}
+.side-menu :deep(.el-menu-item:hover),
+.side-menu :deep(.el-sub-menu__title:hover) {
+  background: var(--c-blue-50);
+  color: var(--c-blue-400);
+}
+.side-menu :deep(.el-menu-item.is-active) {
+  background: var(--c-blue-50);
+  color: var(--c-blue-600);
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 var(--c-blue-400);
+}
+.side-menu :deep(.el-sub-menu .el-menu) {
+  background: transparent;
+}
+.side-menu :deep(.el-sub-menu .el-menu-item) {
+  padding-left: 48px !important;
+}
+
+.header {
+  height: 64px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--c-border);
+}
+.page-title { font-size: 18px; font-weight: 600; color: var(--c-text); }
+.user { display: flex; align-items: center; cursor: pointer; color: var(--c-text); }
+.user-avatar { background: var(--c-orange-500); font-weight: 600; }
+.user-name { margin-left: 8px; font-size: 14px; }
+.user-caret { margin-left: 4px; color: var(--c-text-3); }
+.main { background: var(--c-bg); overflow: auto; padding: 20px 24px 40px; }
 </style>
