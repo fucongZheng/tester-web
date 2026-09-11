@@ -83,7 +83,7 @@
           <el-col :span="12"><el-form-item label="状态">
             <el-select v-model="form.status" style="width:100%">
               <el-option v-for="s in options.status" :key="s" :label="s" :value="s" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="经办人">
+          <el-col :span="12"><el-form-item label="经办人" required>
             <el-select v-model="form.assignee" filterable clearable style="width:100%" placeholder="选择用户">
               <el-option v-for="u in users" :key="u.id" :label="u.real_name || u.username" :value="u.real_name || u.username" />
             </el-select>
@@ -171,6 +171,7 @@ async function openDialog(row) {
 }
 async function save() {
   if (!form.value.title || !form.value.project_id || !form.value.version_id) return ElMessage.warning('标题/项目/版本必填')
+  if (!form.value.assignee) return ElMessage.warning('经办人必填')
   if (form.value.id) await request.put(`/bugs/${form.value.id}`, form.value)
   else await request.post('/bugs', form.value)
   ElMessage.success('保存成功'); dialog.value = false; load()
