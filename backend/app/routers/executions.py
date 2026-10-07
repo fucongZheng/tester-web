@@ -38,7 +38,7 @@ def create_execution(payload: dict, db: Session = Depends(get_db), cur=Depends(g
         raise HTTPException(status_code=400, detail="case_id 必填")
     e = Execution(
         case_id=payload["case_id"], round_no=payload.get("round_no", 1),
-        stage_no=payload.get("stage_no", 3), result=payload.get("result", "未执行"),
+        stage_no=payload.get("stage_no", 5), result=payload.get("result", "未执行"),
         actual=payload.get("actual", ""),
         executor=payload.get("executor") or cur.real_name or cur.username,
         remark=payload.get("remark", ""),

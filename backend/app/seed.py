@@ -56,7 +56,12 @@ def _ensure_columns(db):
         "ALTER TABLE version ADD COLUMN review_minutes TEXT",
         "ALTER TABLE handover ADD COLUMN module_id INT NULL",
         "ALTER TABLE test_suite ADD COLUMN module_id INT NULL",
+        "ALTER TABLE requirement ADD COLUMN source_system VARCHAR(32) DEFAULT ''",
+        "ALTER TABLE requirement ADD COLUMN source_id VARCHAR(64) DEFAULT ''",
+        "ALTER TABLE sync_log ADD COLUMN cases_count INT DEFAULT 0",
         "ALTER TABLE review_record ADD COLUMN module_id INT NULL",
+        "ALTER TABLE review_record ADD COLUMN normal_ids TEXT",
+        "ALTER TABLE test_report ADD COLUMN module_ids TEXT",
         "ALTER TABLE bug_share ADD COLUMN expires_at DATETIME NULL",
         "ALTER TABLE handover_share ADD COLUMN expires_at DATETIME NULL",
     ]
@@ -66,6 +71,30 @@ def _ensure_columns(db):
             db.commit()
         except Exception:
             db.rollback()
+
+
+def _migrate_flow_stage_numbers(db):
+    """旧环节编号（提测=0…上线=6）→ 新编号（用例编写=0…上线=8）：整体 +2。
+
+    以旧首环节名「测试验证开发提测」为标记，跑过一次后不再触发（幂等）。
+    """
+    from sqlalchemy import text
+    marker = "测试验证开发提测"
+    try:
+        n = db.execute(
+            text("SELECT COUNT(*) FROM flow_stage WHERE stage_name = :n"),
+            {"n": marker},
+        ).scalar()
+        if not n:
+            return
+        db.execute(text("UPDATE flow_stage SET stage_no = stage_no + 2"))
+        db.execute(text("UPDATE flow_instance SET current_stage = current_stage + 2"))
+        db.execute(text("UPDATE flow_stage SET stage_name = '开发提测' WHERE stage_name = :n"),
+                   {"n": marker})
+        db.commit()
+        print(f"[OK] flow stages renumbered (+2), {n} legacy handover rows renamed")
+    except Exception:
+        db.rollback()
 
 
 def _sync_completed_flow_versions(db):
@@ -129,6 +158,7 @@ def seed():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     _ensure_columns(db)
+    _migrate_flow_stage_numbers(db)
     _sync_completed_flow_versions(db)
     try:
         all_menu_ids = _sync_menus(db)
@@ -151,10 +181,11 @@ def seed():
                            "项目列表", "需求管理", "版本管理", "模块管理", "开发提测", "测试套件"))
         upsert_role("产品经理", "product", "需求与流程权限",
                     ids_of("项目", "需求", "版本", "提测", "测试流程", "测试报告",
-                           "上线申请", "评审记录",
+                           "上线申请", "评审记录", "冒烟", "BUG管理",
                            "项目列表", "需求管理", "版本管理", "开发提测"))
+        # 开发要有「冒烟」菜单：提测列表的「去执行」跳 /suite，路由按菜单注册，缺了会被兜底重定向回首页
         upsert_role("开发工程师", "developer", "BUG处理权限",
-                    ids_of("项目", "提测", "BUG管理", "上线申请",
+                    ids_of("项目", "提测", "BUG管理", "上线申请", "冒烟",
                            "项目列表", "开发提测"))
         db.flush()
 

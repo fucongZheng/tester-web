@@ -11,6 +11,7 @@ from ..models import (Handover, HandoverShare, Project, Requirement, SysUser,
                       TestCase, TestSuite, Version, Execution, Module)
 from ..deps import get_current_user, require_admin
 from ..helpers import row_to_dict, paginate, gen_code, empty_to_none, parse_id_list, apply_module_filter
+from ..flow_stages import STAGE_NO
 from ..ratelimit import guard_public_write
 
 SHARE_TTL_DAYS = 7
@@ -282,7 +283,7 @@ def public_create_execution(token: str, payload: dict, request: Request, db: Ses
     e = Execution(
         case_id=case_id,
         round_no=payload.get("round_no", 1),
-        stage_no=payload.get("stage_no", 1),
+        stage_no=payload.get("stage_no", STAGE_NO["dev_handover"]),
         result=result,
         actual=payload.get("actual", ""),
         executor=executor,

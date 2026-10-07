@@ -44,6 +44,7 @@
 
       <el-table-column prop="id" label="ID" width="60" align="center" />
       <el-table-column prop="project_name" label="项目" width="150" show-overflow-tooltip />
+      <el-table-column prop="version_name" label="版本名称" width="150" show-overflow-tooltip />
       <el-table-column prop="version_no" label="版本" width="100" align="center" />
       <el-table-column prop="current_stage_label" label="当前环节" width="180" show-overflow-tooltip>
         <template #default="{ row }"><b style="color:var(--c-orange-500)">{{ row.current_stage_label }}</b></template>
@@ -62,8 +63,8 @@
           <div class="action-buttons">
             <template v-if="row.status === '进行中'">
               <el-button size="small" type="primary" @click="openAction(row, 'pass')">通过</el-button>
-              <el-button v-if="[1, 2].includes(row.current_stage)" size="small" @click="openAction(row, 'skip')">跳过</el-button>
-              <el-button v-if="[0, 5].includes(row.current_stage)" size="small" type="danger" @click="openAction(row, 'reject')">驳回</el-button>
+              <el-button v-if="metaOf(row).skippable" size="small" @click="openAction(row, 'skip')">跳过</el-button>
+              <el-button v-if="metaOf(row).rejectKind" size="small" type="danger" @click="openAction(row, 'reject')">驳回</el-button>
             </template>
             <span v-else style="color:#c0c4cc">{{ row.status === '已挂起' ? '已挂起' : '已结束' }}</span>
             <el-button v-if="isAdmin" size="small" type="danger" link @click="del(row)">删除</el-button>
@@ -149,19 +150,36 @@ const startDialog = ref(false); const startForm = ref({ project_id: '', version_
 const actionDialog = ref(false); const actionForm = ref({ remark: '' })
 const actionTarget = ref(null); const actionType = ref('pass')
 
+// 环节 code → 界面行为（按钮显示、弹窗文案），与后端 flow_stages.py 对应。
+// 后端调整环节时只需同步这份声明式配置，不写环节序号。
+const STAGE_META = {
+  case_writing: { passTitle: '完成用例编写，进入用例评审', passTip: '填写用例编写完成说明' },
+  case_review: { passTitle: '用例评审通过，进入开发提测', passTip: '填写评审结论说明' },
+  dev_handover: { rejectKind: 'handover', passTitle: '提测通过，进入 AI 接口测试', passTip: '填写提测验证说明' },
+  ai_api: { skippable: true },
+  ai_ui: { skippable: true },
+  manual: {},
+  regression: {},
+  acceptance: { rejectKind: 'acceptance' },
+  launch: {},
+}
+const metaOf = row => STAGE_META[row.current_stage_code] || {}
+
 const actionTitle = computed(() => {
+  const meta = metaOf(actionTarget.value || {})
   if (actionType.value === 'skip') return '跳过当前环节'
   if (actionType.value === 'reject') {
-    return actionTarget.value?.current_stage === 0 ? '驳回开发提测' : '产品验收驳回'
+    return meta.rejectKind === 'handover' ? '驳回开发提测' : '产品验收驳回'
   }
-  return actionTarget.value?.current_stage === 0 ? '通过提测，进入 AI 接口测试' : '进入下一环节'
+  return meta.passTitle || '进入下一环节'
 })
 const actionPlaceholder = computed(() => {
+  const meta = metaOf(actionTarget.value || {})
   if (actionType.value === 'skip') return '填写跳过原因'
   if (actionType.value === 'reject') {
-    return actionTarget.value?.current_stage === 0 ? '填写驳回提测原因（必填）' : '填写验收不通过的原因'
+    return meta.rejectKind === 'handover' ? '填写驳回提测原因（必填）' : '填写验收不通过的原因'
   }
-  return actionTarget.value?.current_stage === 0 ? '填写提测验证说明' : '填写本环节通过说明'
+  return meta.passTip || '填写本环节通过说明'
 })
 
 function stageTagType(s) { return { 通过: 'success', 驳回: 'danger', 跳过: 'info', 进行中: 'primary', 待开始: 'info' }[s] || '' }
@@ -201,7 +219,7 @@ async function del(row) {
   load()
 }
 async function maybeRemindReport(row) {
-  if (row.current_stage !== 5) return true
+  if (row.current_stage_code !== 'acceptance') return true
   try {
     const res = await request.get('/reports', {
       params: { project_id: row.project_id, version_id: row.version_id, page: 1, size: 1 },
@@ -242,7 +260,7 @@ function onUploadRemove(file) {
   attachments.value = attachments.value.filter(a => a.url !== url)
 }
 async function doAction() {
-  if (actionType.value === 'reject' && actionTarget.value?.current_stage === 0 && !(actionForm.value.remark || '').trim()) {
+  if (actionType.value === 'reject' && metaOf(actionTarget.value).rejectKind === 'handover' && !(actionForm.value.remark || '').trim()) {
     return ElMessage.warning('驳回提测必须填写备注')
   }
   const url = `/flow/${actionTarget.value.id}/${actionType.value}`

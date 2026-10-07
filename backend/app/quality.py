@@ -3,21 +3,7 @@ from datetime import datetime
 
 from .models import (Project, Version, Requirement, TestCase, Execution, Bug,
                      FlowInstance, Handover, LaunchRequest, ReviewRecord)
-
-
-def _stage_label(stage_no, round_no):
-    names = {
-        0: "测试验证开发提测",
-        1: "AI接口测试(代码测试)",
-        2: "AI界面测试",
-        3: f"人工第{round_no or 1}轮测试",
-        4: "回归测试",
-        5: "产品验收",
-        6: "上线+生产环境验证",
-    }
-    if stage_no == 3:
-        return names[3]
-    return names.get(stage_no, f"环节{stage_no}")
+from .flow_stages import stage_label as _stage_label, STAGE_NO
 
 CLOSED = {"测试验证通过关闭", "不是BUG"}
 SEV_ORDER = ["致命", "严重", "一般", "轻微", "建议"]
@@ -207,7 +193,8 @@ def build_snapshot(db, project_id=0, version_id=0):
                 "status": f.status, "stuck_days": days,
                 "link": "/flow",
             })
-        reject_n += sum(1 for s in (f.stages or []) if s.stage_no == 5 and s.status == "驳回")
+        reject_n += sum(1 for s in (f.stages or [])
+                        if s.stage_no == STAGE_NO["acceptance"] and s.status == "驳回")
     stuck = stuck[:MAX_LIST]
 
     flow_info = {
@@ -220,7 +207,8 @@ def build_snapshot(db, project_id=0, version_id=0):
             "stage": _stage_label(flow.current_stage, flow.current_round),
             "round": flow.current_round,
             "stuck_days": _days_ago(flow.updated_at or flow.started_at) if flow.status == "进行中" else 0,
-            "acceptance_rejected": sum(1 for s in (flow.stages or []) if s.stage_no == 5 and s.status == "驳回"),
+            "acceptance_rejected": sum(1 for s in (flow.stages or [])
+                                       if s.stage_no == STAGE_NO["acceptance"] and s.status == "驳回"),
         })
     elif not vid:
         running = [f for f in flows if f.status == "进行中"]

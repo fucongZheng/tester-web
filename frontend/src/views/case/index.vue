@@ -6,7 +6,10 @@
         <el-select v-model="query.project_id" placeholder="项目" clearable filterable style="width:140px" @change="onProjectChange">
           <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
         </el-select>
-        <el-select v-model="query.version_id" placeholder="版本" clearable filterable style="width:120px" @change="load">
+        <el-select v-model="query.version_id" placeholder="版本名称" clearable filterable style="width:140px" @change="load">
+          <el-option v-for="v in versions" :key="v.id" :label="v.name || v.version_no" :value="v.id" />
+        </el-select>
+        <el-select v-model="query.version_id" placeholder="选版本名称后自动带出" disabled filterable style="width:140px">
           <el-option v-for="v in versions" :key="v.id" :label="v.version_no" :value="v.id" />
         </el-select>
         <el-select v-model="query.module_id" placeholder="模块" clearable filterable style="width:120px" @change="load">
@@ -35,6 +38,7 @@
       </el-table-column>
       <el-table-column prop="project_name" label="项目" width="120" />
       <el-table-column prop="version_name" label="版本" width="80" />
+      <el-table-column prop="version_label" label="版本名称" width="110" show-overflow-tooltip />
       <el-table-column prop="module_name" label="模块" width="90" />
       <el-table-column prop="status" label="状态" width="70">
         <template #default="{ row }"><el-tag :type="row.status ? 'success' : 'info'" size="small">{{ row.status ? '启用' : '停用' }}</el-tag></template>
@@ -57,23 +61,34 @@
           <el-col :span="12"><el-form-item label="项目" required>
             <el-select v-model="aiForm.project_id" style="width:100%" filterable @change="loadAiVersions">
               <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="版本" required>
+          <el-col :span="12"><el-form-item label="版本名称" required>
             <el-select v-model="aiForm.version_id" style="width:100%" filterable @change="loadAiRelated">
-              <el-option v-for="v in aiVersions" :key="v.id" :label="v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
+              <el-option v-for="v in aiVersions" :key="v.id" :label="v.name || v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
         </el-row>
         <el-row :gutter="10">
+          <el-col :span="12"><el-form-item label="版本">
+            <el-select v-model="aiForm.version_id" disabled style="width:100%" placeholder="选版本名称后自动带出">
+              <el-option v-for="v in aiVersions" :key="v.id" :label="v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="模块">
             <el-select v-model="aiForm.module_id" style="width:100%" clearable filterable>
               <el-option v-for="m in aiModules" :key="m.id" :label="m.name" :value="m.id" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="10">
           <el-col :span="12"><el-form-item label="关联需求">
             <el-select v-model="aiForm.requirement_id" style="width:100%" clearable filterable>
               <el-option v-for="r in aiReqs" :key="r.id" :label="r.name" :value="r.id" /></el-select></el-form-item></el-col>
         </el-row>
+        <el-form-item label="生成模式" required>
+          <el-radio-group v-model="aiForm.mode">
+            <el-radio value="loop">闭环用例（主链路端到端）</el-radio>
+            <el-radio value="detail">细节用例（字段级加厚）</el-radio>
+          </el-radio-group>
+        </el-form-item>
         <el-form-item label="需求内容" required>
           <el-input v-model="aiForm.requirement" type="textarea" :rows="6" placeholder="粘贴或填写需求说明、验收标准、接口约定等" />
         </el-form-item>
-        <el-form-item label="提示词" required>
-          <el-input v-model="aiForm.prompt" type="textarea" :rows="4" />
+        <el-form-item label="附加要求">
+          <el-input v-model="aiForm.prompt" type="textarea" :rows="3" placeholder="可选。补充侧重方向，如「重点覆盖支付链路」；主提示词已内置用例设计方法论" />
         </el-form-item>
       </el-form>
 
@@ -118,21 +133,26 @@
           <el-col :span="12"><el-form-item label="项目" required>
             <el-select v-model="form.project_id" style="width:100%" filterable @change="loadFormVersions">
               <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="版本" required>
-            <el-select v-model="form.version_id" style="width:100%" filterable @change="loadFormModules">
-              <el-option v-for="v in formVersions" :key="v.id" :label="v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="版本名称" required>
+            <el-select v-model="form.version_id" style="width:100%" filterable placeholder="选择版本名称" @change="loadFormModules">
+              <el-option v-for="v in formVersions" :key="v.id" :label="v.name || v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
         </el-row>
         <el-row :gutter="10">
+          <el-col :span="12"><el-form-item label="版本">
+            <el-select v-model="form.version_id" disabled style="width:100%" placeholder="选版本名称后自动带出">
+              <el-option v-for="v in formVersions" :key="v.id" :label="v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="模块">
             <el-select v-model="form.module_id" style="width:100%" clearable filterable>
               <el-option v-for="m in formModules" :key="m.id" :label="m.name" :value="m.id" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="10">
           <el-col :span="12"><el-form-item label="关联需求">
             <el-select v-model="form.requirement_id" style="width:100%" clearable filterable>
               <el-option v-for="r in formReqs" :key="r.id" :label="r.name" :value="r.id" /></el-select></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="10">
           <el-col :span="12"><el-form-item label="类型"><el-select v-model="form.case_type" style="width:100%">
             <el-option v-for="s in options.case_type" :key="s" :label="s" :value="s" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="10">
           <el-col :span="12"><el-form-item label="优先级"><el-select v-model="form.priority" style="width:100%">
             <el-option v-for="s in options.priority" :key="s" :label="s" :value="s" /></el-select></el-form-item></el-col>
         </el-row>
@@ -211,7 +231,7 @@ const query = ref({ page: 1, size: 10, keyword: '', project_id: '', version_id: 
 const form = ref({})
 const execDialog = ref(false); const execCase = ref({}); const executions = ref([]); const execResults = ref([])
 const execForm = ref({ result: '通过', round_no: 1, actual: '' })
-const DEFAULT_AI_PROMPT = '请根据需求内容生成可执行的测试用例，覆盖正常流程、异常/边界、校验与权限、关键交互。每条步骤要具体可操作，预期结果可验证。生成 8～20 条高质量用例，避免重复和空泛描述。'
+const DEFAULT_AI_PROMPT = '' // 主提示词已内置双 skill 方法论，这里只放用户附加要求
 const aiDialog = ref(false)
 const aiStep = ref(1)
 const aiGenerating = ref(false)
@@ -224,7 +244,7 @@ const aiSelected = ref([])
 const aiTableRef = ref()
 const aiForm = ref({
   project_id: '', version_id: '', module_id: null, requirement_id: null,
-  requirement: '', prompt: DEFAULT_AI_PROMPT,
+  requirement: '', prompt: '', mode: 'loop',
 })
 
 function prioType(p) { return { P0: 'danger', P1: 'warning', P2: 'primary', P3: 'info' }[p] || '' }
@@ -320,7 +340,8 @@ async function openAiDialog() {
     module_id: null,
     requirement_id: null,
     requirement: '',
-    prompt: DEFAULT_AI_PROMPT,
+    prompt: '',
+    mode: 'loop',
   }
   aiVersions.value = []
   aiModules.value = []
@@ -353,11 +374,10 @@ async function loadAiRelated() {
 }
 async function doAiGenerate() {
   if (!aiForm.value.requirement?.trim()) return ElMessage.warning('需求内容必填')
-  if (!aiForm.value.prompt?.trim()) return ElMessage.warning('提示词必填')
   if (!aiForm.value.project_id || !aiForm.value.version_id) return ElMessage.warning('请先选择项目和版本，生成后才能保存')
   aiGenerating.value = true
   try {
-    const res = await request.post('/cases/ai-generate', aiForm.value, { timeout: 120000 })
+    const res = await request.post('/cases/ai-generate', aiForm.value, { timeout: 200000 })
     aiCases.value = res.items || []
     if (!aiCases.value.length) return ElMessage.warning('未生成到用例')
     aiStep.value = 2

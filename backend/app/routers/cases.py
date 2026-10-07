@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..ai_client import AIError, chat
+from ..ai_prompts import MODE_LABELS, build_user_prompt, system_prompt
 from ..database import get_db
 from ..models import (Module, Project, Requirement, TestCase, Version,
                       Execution, Bug, TestSuite, ReviewRecord)
@@ -57,6 +58,7 @@ def list_cases(page: int = 1, size: int = 10, keyword: str = "",
         d = row_to_dict(c)
         d["project_name"] = c.project.name if c.project else ""
         d["version_name"] = c.version.version_no if c.version else ""
+        d["version_label"] = c.version.name if c.version else ""
         d["module_name"] = c.module.name if c.module else ""
         d["requirement_name"] = c.requirement.name if c.requirement else ""
         data.append(d)
@@ -196,15 +198,29 @@ def _persist_cases(db: Session, rows: list[TestCase]):
             c.case_no = gen_code("TC", c.id)
 
 
+def generate_cases_for_text(mode: str, user_prompt: str) -> list[dict]:
+    """按模式（detail 细节 / loop 闭环，走 app/prompts 双 skill）生成用例，归一化后返回。
+
+    供 /ai-generate 预览与需求同步自动生成共用；AI 调用/解析失败向上抛。
+    """
+    try:
+        system = system_prompt(mode)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    raw = chat(user_prompt, system=system, temperature=0.2, timeout=180)
+    return _normalize_ai_cases(_extract_json(raw))
+
+
 @router.post("/ai-generate")
 def ai_generate(payload: dict, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    """只生成预览，不入库。"""
+    """只生成预览，不入库。mode=detail 细节用例 / loop 闭环用例（双 skill 提示词）。"""
     requirement = (payload.get("requirement") or "").strip()
-    prompt = (payload.get("prompt") or "").strip()
+    prompt = (payload.get("prompt") or "").strip()  # 附加要求，可选
+    mode = (payload.get("mode") or "detail").strip()
+    if mode not in MODE_LABELS:
+        raise HTTPException(status_code=400, detail=f"生成模式只能是 {'/'.join(MODE_LABELS)}")
     if not requirement:
         raise HTTPException(status_code=400, detail="需求内容必填")
-    if not prompt:
-        raise HTTPException(status_code=400, detail="提示词必填")
 
     context_lines = []
     project_id = empty_to_none(payload.get("project_id"))
@@ -228,19 +244,16 @@ def ai_generate(payload: dict, db: Session = Depends(get_db), _=Depends(get_curr
         if r:
             context_lines.append(f"关联需求：{r.req_no} {r.name}")
 
-    user_prompt = (
-        f"{prompt}\n\n"
-        + (("上下文：\n" + "\n".join(context_lines) + "\n\n") if context_lines else "")
-        + f"需求内容：\n{requirement}\n"
-    )
+    user_prompt = build_user_prompt(requirement, context_lines, prompt)
     try:
-        raw = chat(user_prompt, system=AI_SYSTEM, temperature=0.2, timeout=120)
+        cases = generate_cases_for_text(mode, user_prompt)
+    except HTTPException:
+        raise
     except AIError as e:
         raise HTTPException(status_code=502, detail=str(e))
-    cases = _normalize_ai_cases(_extract_json(raw))
     if not cases:
-        raise HTTPException(status_code=502, detail="AI 未生成有效用例，请调整需求内容或提示词后重试")
-    return {"items": cases, "total": len(cases)}
+        raise HTTPException(status_code=502, detail="AI 未生成有效用例，请调整需求内容或附加要求后重试")
+    return {"items": cases, "total": len(cases), "mode": mode, "modeLabel": MODE_LABELS[mode]}
 
 
 @router.post("/batch")

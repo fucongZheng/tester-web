@@ -6,7 +6,10 @@
         <el-select v-model="query.project_id" placeholder="项目" clearable filterable style="width:130px" @change="onProjectChange">
           <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
         </el-select>
-        <el-select v-model="query.version_id" placeholder="版本" clearable filterable style="width:120px" @change="load">
+        <el-select v-model="query.version_id" placeholder="版本名称" clearable filterable style="width:140px" @change="load">
+          <el-option v-for="v in versions" :key="v.id" :label="v.name || v.version_no" :value="v.id" />
+        </el-select>
+        <el-select v-model="query.version_id" placeholder="选版本名称后自动带出" disabled filterable style="width:140px">
           <el-option v-for="v in versions" :key="v.id" :label="v.version_no" :value="v.id" />
         </el-select>
         <el-select v-model="query.module_id" placeholder="模块" clearable filterable style="width:120px" @change="load">
@@ -17,6 +20,9 @@
         </el-select>
         <el-select v-model="query.status" placeholder="状态" clearable style="width:130px" @change="load">
           <el-option v-for="s in options.status" :key="s" :label="s" :value="s" />
+        </el-select>
+        <el-select v-model="query.assignee" placeholder="经办人" clearable filterable style="width:110px" @change="load">
+          <el-option v-for="u in users" :key="u.id" :label="u.real_name || u.username" :value="u.real_name || u.username" />
         </el-select>
         <el-button type="primary" @click="load">查询</el-button>
       </div>
@@ -84,7 +90,7 @@
             <el-select v-model="form.status" style="width:100%">
               <el-option v-for="s in options.status" :key="s" :label="s" :value="s" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="经办人" required>
-            <el-select v-model="form.assignee" filterable clearable style="width:100%" placeholder="选择用户">
+            <el-select v-model="form.assignee" filterable clearable style="width:100%" placeholder="选择用户" @change="onAssigneeChange">
               <el-option v-for="u in users" :key="u.id" :label="u.real_name || u.username" :value="u.real_name || u.username" />
             </el-select>
           </el-form-item></el-col>
@@ -168,6 +174,10 @@ async function openDialog(row) {
   if (row) await fillFormOptions()
   else { formVersions.value = []; formModules.value = [] }
   dialog.value = true
+}
+// 选了经办人后，修复人为空时默认同经办人；已手动选过修复人则不覆盖
+function onAssigneeChange(val) {
+  if (val && !form.value.fixer) form.value.fixer = val
 }
 async function save() {
   if (!form.value.title || !form.value.project_id || !form.value.version_id) return ElMessage.warning('标题/项目/版本必填')

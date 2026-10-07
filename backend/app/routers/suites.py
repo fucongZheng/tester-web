@@ -8,10 +8,12 @@ from ..database import get_db
 from ..models import TestSuite, TestCase, Handover, Execution
 from ..deps import get_current_user, require_admin
 from ..helpers import row_to_dict, paginate, gen_code, parse_id_list, empty_to_none, apply_module_filter
+from ..flow_stages import STAGE_NO, SUITE_TYPE_STAGE
 
 router = APIRouter(prefix="/api/suites", tags=["测试套件"])
 
 SUITE_TYPES = ["冒烟", "第一轮功能", "回归", "自定义"]
+EXEC_RESULTS = ["通过", "失败", "阻塞", "跳过"]  # 可提交的执行结果（未执行不算）
 
 
 def _latest_results(db, case_ids):
@@ -120,6 +122,64 @@ def get_suite(sid: int, db: Session = Depends(get_db), _=Depends(get_current_use
     if not s:
         raise HTTPException(status_code=404, detail="套件不存在")
     return _to_dict(s, db)
+
+
+def _suite_or_404(db: Session, sid: int) -> TestSuite:
+    s = db.query(TestSuite).filter(TestSuite.id == sid).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="套件不存在")
+    return s
+
+
+@router.get("/{sid}/executions")
+def suite_execution_sheet(sid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """执行弹窗数据：套件内用例（含步骤）+ 各自最近一次执行结果，一次查询。"""
+    s = _suite_or_404(db, sid)
+    ids = parse_id_list(s.case_ids)
+    latest = _latest_results(db, ids)
+    rows = db.query(TestCase).filter(TestCase.id.in_(ids or [0])).all() if ids else []
+    by_id = {c.id: c for c in rows}
+    items = []
+    for cid in ids:
+        c = by_id.get(cid)
+        if c:
+            items.append({
+                "id": c.id, "case_no": c.case_no, "title": c.title, "case_type": c.case_type,
+                "priority": c.priority, "precondition": c.precondition or "",
+                "steps": c.steps or "", "expected": c.expected or "",
+                "last_result": latest.get(cid, ""),
+            })
+    return {"id": s.id, "name": s.name, "suite_type": s.suite_type, "items": items}
+
+
+@router.post("/{sid}/executions")
+def submit_suite_executions(sid: int, payload: dict, db: Session = Depends(get_db),
+                            cur=Depends(get_current_user)):
+    """整套件批量提交执行记录：items=[{case_id,result,actual}]，轮次统一，
+    执行记录按套件类型自动归属流程环节（冒烟→提测、第一轮功能→人工、回归→回归）。"""
+    s = _suite_or_404(db, sid)
+    valid_ids = set(parse_id_list(s.case_ids))
+    items = payload.get("items") or []
+    if not items:
+        raise HTTPException(status_code=400, detail="套件内没有用例，无可提交的执行记录")
+    round_no = int(payload.get("round_no") or 1)
+    stage_no = STAGE_NO[SUITE_TYPE_STAGE.get(s.suite_type, "manual")]
+    executor = cur.real_name or cur.username
+    for it in items:
+        if it.get("case_id") not in valid_ids:
+            raise HTTPException(status_code=400, detail="存在不属于该套件的用例，请刷新后重试")
+        if it.get("result") not in EXEC_RESULTS:
+            raise HTTPException(status_code=400,
+                                detail=f"用例执行结果必须是 {'/'.join(EXEC_RESULTS)}，不能提交「未执行」")
+    for it in items:
+        db.add(Execution(
+            case_id=it["case_id"], round_no=round_no, stage_no=stage_no,
+            result=it["result"], actual=it.get("actual", ""),
+            executor=executor, remark=f"套件执行：{s.name}",
+        ))
+    db.commit()
+    latest = _latest_results(db, list(valid_ids))
+    return {"created": len(items), **_exec_stats(list(valid_ids), latest)}
 
 
 @router.post("")

@@ -126,9 +126,14 @@ async function save() {
   if (!form.value.version_no || !form.value.project_id) return ElMessage.warning('版本号和项目必填')
   if (!form.value.launch_date) return ElMessage.warning('上线时间必填')
   if (!(form.value.review_minutes || '').trim()) return ElMessage.warning('需求评审纪要必填')
-  if (form.value.id) await request.put(`/versions/${form.value.id}`, form.value)
-  else await request.post('/versions', form.value)
-  ElMessage.success('保存成功'); dialog.value = false; load()
+  if (form.value.id) {
+    await request.put(`/versions/${form.value.id}`, form.value)
+    ElMessage.success('保存成功')
+  } else {
+    await request.post('/versions', form.value)
+    ElMessage.success('保存成功，已自动创建测试流程，进入「测试用例编写」环节')
+  }
+  dialog.value = false; load()
 }
 async function fillFromReviews() {
   if (!form.value.id) return ElMessage.warning('请先保存版本，再从评审记录生成')

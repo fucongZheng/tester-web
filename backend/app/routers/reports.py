@@ -1,5 +1,6 @@
 """测试报告：聚合现有数据填入 Word 模板后导出"""
 import io
+import json
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -14,13 +15,16 @@ from ..models import (TestReport, Project, Version, Requirement, TestCase,
                       Execution, Bug, FlowInstance, Module)
 from ..deps import get_current_user, require_admin
 from ..helpers import row_to_dict, gen_code
-from .flow import stage_label
+from ..flow_stages import stage_label
 
 router = APIRouter(prefix="/api/reports", tags=["测试报告"])
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 DOCX_TEMPLATE = TEMPLATE_DIR / "report_template.docx"
-_env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+# trim_blocks+lstrip_blocks：让 {% for %} 这类块标签整行消失，
+# 否则渲染出的 markdown 表格行之间夹空行，GFM 解析时表格会被截断成散文本
+_env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)),
+                   trim_blocks=True, lstrip_blocks=True)
 
 CLOSED = {"测试验证通过关闭", "不是BUG"}
 SEV_ORDER = ["致命", "严重", "一般", "轻微", "建议"]
@@ -43,18 +47,30 @@ def _strip_html(html: str) -> str:
     return text.replace("&nbsp;", " ").strip()
 
 
-def _aggregate(db, project_id, version_id):
+def _aggregate(db, project_id, version_id, module_ids=None):
+    """module_ids 非空时报告只统计所选模块（需求/用例/BUG 按 module_id 过滤），空则整版本。"""
     project = db.query(Project).filter(Project.id == project_id).first()
     version = db.query(Version).filter(Version.id == version_id).first()
     if not project or not version:
         raise HTTPException(status_code=400, detail="项目或版本不存在")
 
-    reqs = db.query(Requirement).filter(Requirement.version_id == version_id).all()
-    cases = db.query(TestCase).filter(TestCase.version_id == version_id).all()
+    module_ids = [m for m in (module_ids or []) if m]
+    req_q = db.query(Requirement).filter(Requirement.version_id == version_id)
+    case_q = db.query(TestCase).filter(TestCase.version_id == version_id)
+    bug_q = db.query(Bug).filter(Bug.version_id == version_id)
+    if module_ids:
+        req_q = req_q.filter(Requirement.module_id.in_(module_ids))
+        case_q = case_q.filter(TestCase.module_id.in_(module_ids))
+        bug_q = bug_q.filter(Bug.module_id.in_(module_ids))
+    reqs = req_q.all()
+    cases = case_q.all()
     case_ids = [c.id for c in cases]
     execs = db.query(Execution).filter(Execution.case_id.in_(case_ids)).all() if case_ids else []
-    bugs = db.query(Bug).filter(Bug.version_id == version_id).all()
-    modules = db.query(Module).filter(Module.project_id == project_id).all()
+    bugs = bug_q.all()
+    if module_ids:
+        modules = db.query(Module).filter(Module.id.in_(module_ids)).order_by(Module.id).all()
+    else:
+        modules = db.query(Module).filter(Module.project_id == project_id).all()
 
     latest = {}
     for e in execs:
@@ -138,6 +154,7 @@ def _md_content(title, agg, generator, generated_at):
         "bug_status": agg["bug_status"], "bug_module": agg["bug_module"],
         "bug_stage": agg["bug_stage"],
         "flow_stage": agg["flow_stage"], "flow_round": agg["flow_round"],
+        "modules": agg["modules"],
     }
     return _env.get_template("report.md.j2").render(**ctx)
 
@@ -403,7 +420,8 @@ def list_reports(page: int = 1, size: int = 10, project_id: int = 0, version_id:
 def generate_report(payload: dict, db: Session = Depends(get_db), cur=Depends(get_current_user)):
     project_id = payload.get("project_id")
     version_id = payload.get("version_id")
-    agg = _aggregate(db, project_id, version_id)
+    module_ids = payload.get("module_ids") or []
+    agg = _aggregate(db, project_id, version_id, module_ids)
     title = payload.get("title") or f"{agg['project'].name}-{agg['version'].version_no}测试报告"
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     generator = cur.real_name or cur.username
@@ -411,6 +429,7 @@ def generate_report(payload: dict, db: Session = Depends(get_db), cur=Depends(ge
     r = TestReport(
         title=title, project_id=project_id, version_id=version_id,
         content=content, method="系统", generator=generator,
+        module_ids=json.dumps([int(m) for m in module_ids if m]),
     )
     db.add(r)
     db.flush()
@@ -447,7 +466,11 @@ def export_report(rid: int, db: Session = Depends(get_db), _=Depends(get_current
     r = db.query(TestReport).filter(TestReport.id == rid).first()
     if not r:
         raise HTTPException(status_code=404, detail="报告不存在")
-    agg = _aggregate(db, r.project_id, r.version_id)
+    try:
+        scope_module_ids = json.loads(r.module_ids or "[]")
+    except Exception:
+        scope_module_ids = []
+    agg = _aggregate(db, r.project_id, r.version_id, scope_module_ids)
     generated_at = r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     doc_bytes = build_docx(agg, r.title, r.generator or "", generated_at)
     filename = f"{r.title or r.report_no}.docx"

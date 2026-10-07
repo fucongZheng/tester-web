@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     AI_API_KEY: str = ""
     AI_MODEL: str = ""
 
+    # xuqiu 需求系统开放 API（需求同步的事实源）
+    XUQIU_BASE_URL: str = "http://127.0.0.1:8000"
+    XUQIU_API_KEY: str = "inkproto-open-9f2c1d7a"
+    # 同步新增需求后自动调 AI 生成用例（关掉则只同步需求）
+    SYNC_AUTO_CASES: bool = True
+
     class Config:
         env_file = ".env"
         extra = "ignore"

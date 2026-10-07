@@ -19,7 +19,7 @@
       @paste="onPaste"
       @drop.prevent="onDrop"
     />
-    <div class="tip">可点「截图」或直接粘贴/拖入图片，单张不超过 20MB，建议一次 3～8 张</div>
+    <div class="tip">可点「截图」或直接粘贴/拖入图片，图片会自动压缩（长边 ≤1920 转 WebP），单张不超过 20MB，建议一次 3～8 张</div>
   </div>
 </template>
 
@@ -76,17 +76,36 @@ function onDrop(e) {
   const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'))
   if (files.length) uploadFiles(files)
 }
+// 截图多为高分屏 PNG，一张好几 MB；长边压到 1920 重编码为 WebP，体积通常降 85% 以上
+async function compressImage(file, maxDim = 1920, quality = 0.85) {
+  if (file.type === 'image/gif' || file.size < 200 * 1024) return file
+  const bmp = await createImageBitmap(file)
+  const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height))
+  const w = Math.round(bmp.width * scale)
+  const h = Math.round(bmp.height * scale)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  canvas.getContext('2d').drawImage(bmp, 0, 0, w, h)
+  bmp.close()
+  const blob = await new Promise((r) => canvas.toBlob(r, 'image/webp', quality))
+  if (!blob || blob.size >= file.size) return file
+  return new File([blob], `${(file.name || 'image').replace(/\.\w+$/, '')}.webp`, { type: 'image/webp' })
+}
+
 async function uploadFiles(files) {
   if (!files.length) return
   uploading.value = true
   try {
     for (const file of files) {
-      if (file.size > 20 * 1024 * 1024) {
-        ElMessage.warning(`${file.name} 超过 20MB，已跳过`)
+      let img = file
+      try { img = await compressImage(file) } catch { /* 压缩失败按原图上传 */ }
+      if (img.size > 20 * 1024 * 1024) {
+        ElMessage.warning(`${img.name} 超过 20MB，已跳过`)
         continue
       }
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', img)
       const token = localStorage.getItem('token') || ''
       const res = await axios.post('/api/uploads', fd, {
         headers: { Authorization: token ? `Bearer ${token}` : '' },

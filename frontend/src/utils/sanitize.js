@@ -3,10 +3,12 @@ import { marked } from 'marked'
 
 const HTML_CFG = {
   ALLOWED_TAGS: [
-    'p', 'br', 'div', 'span', 'strong', 'b', 'em', 'i', 'u', 's',
+    'p', 'br', 'hr', 'div', 'span', 'strong', 'b', 'em', 'i', 'u', 's',
     'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'pre', 'code', 'h1', 'h2', 'h3', 'h4',
+    // markdown 表格（测试报告/AI 回答都大量用表格，缺了会被整段剥成纯文本）
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
   ],
-  ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'rel', 'class'],
+  ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'rel', 'class', 'loading'],
   ALLOW_DATA_ATTR: false,
   FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'svg'],
 }
@@ -21,6 +23,7 @@ function afterSanitize(node) {
   if (node.tagName === 'IMG') {
     const src = (node.getAttribute('src') || '').trim()
     if (!/^(https?:\/\/|\/uploads\/)/i.test(src)) node.removeAttribute('src')
+    node.setAttribute('loading', 'lazy') // 富文本里截图多，进视口才加载
   }
 }
 

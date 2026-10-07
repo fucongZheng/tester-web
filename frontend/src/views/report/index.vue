@@ -34,15 +34,23 @@
     <Pager v-model:page="page" v-model:size="size" :total="total" @update:page="load" @update:size="load" />
 
     <!-- 生成 -->
-    <el-dialog v-model="genDialog" title="一键生成测试报告" width="440px">
+    <el-dialog v-model="genDialog" title="一键生成测试报告" width="460px">
       <el-form label-width="80px">
         <el-form-item label="项目" required>
           <el-select v-model="genForm.project_id" style="width:100%" filterable @change="loadGenVersions">
             <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" /></el-select>
         </el-form-item>
-        <el-form-item label="版本" required>
-          <el-select v-model="genForm.version_id" style="width:100%" filterable>
+        <el-form-item label="版本名称" required>
+          <el-select v-model="genForm.version_id" style="width:100%" filterable placeholder="选择版本名称" @change="loadGenModules">
+            <el-option v-for="v in genVersions" :key="v.id" :label="v.name || v.version_no" :value="v.id" /></el-select>
+        </el-form-item>
+        <el-form-item label="版本">
+          <el-select v-model="genForm.version_id" disabled style="width:100%" placeholder="选版本名称后自动带出">
             <el-option v-for="v in genVersions" :key="v.id" :label="v.version_no" :value="v.id" /></el-select>
+        </el-form-item>
+        <el-form-item label="模块" required>
+          <el-select v-model="genForm.module_ids" multiple filterable style="width:100%" placeholder="根据版本带出，可多选">
+            <el-option v-for="m in genModules" :key="m.id" :label="m.name" :value="m.id" /></el-select>
         </el-form-item>
         <el-form-item label="标题"><el-input v-model="genForm.title" placeholder="留空自动生成" /></el-form-item>
       </el-form>
@@ -73,7 +81,8 @@ const items = ref([]); const total = ref(0); const loading = ref(false)
 const projects = ref([]); const project_id = ref('')
 const page = ref(1); const size = ref(10)
 const genDialog = ref(false); const generating = ref(false)
-const genForm = ref({ project_id: '', version_id: '', title: '' }); const genVersions = ref([])
+const genForm = ref({ project_id: '', version_id: '', module_ids: [], title: '' })
+const genVersions = ref([]); const genModules = ref([])
 const viewDialog = ref(false); const viewReport = ref({}); const rendered = ref('')
 
 async function load() {
@@ -86,16 +95,26 @@ async function load() {
 async function onProjectChange() { load() }
 async function loadGenVersions() {
   genForm.value.version_id = ''
+  genForm.value.module_ids = []
   genVersions.value = await request.get('/versions/all', { params: { project_id: genForm.value.project_id } })
+  genModules.value = []
+}
+async function loadGenModules() {
+  genForm.value.module_ids = []
+  genModules.value = genForm.value.project_id
+    ? await request.get('/modules/all', { params: { project_id: genForm.value.project_id } })
+    : []
 }
 async function doGenerate() {
   if (!genForm.value.project_id || !genForm.value.version_id) return ElMessage.warning('项目和版本必填')
+  if (!genForm.value.module_ids?.length) return ElMessage.warning('模块必填')
   generating.value = true
   try {
     await request.post('/reports/generate', genForm.value)
     ElMessage.success('报告已根据系统数据生成')
     genDialog.value = false
-    genForm.value = { project_id: '', version_id: '', title: '' }
+    genForm.value = { project_id: '', version_id: '', module_ids: [], title: '' }
+    genVersions.value = []; genModules.value = []
     load()
   } finally { generating.value = false }
 }

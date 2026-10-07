@@ -64,8 +64,13 @@
             <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="版本" required>
-          <el-select v-model="form.version_id" style="width:100%" filterable @change="onFormVersion">
+        <el-form-item label="版本名称" required>
+          <el-select v-model="form.version_id" style="width:100%" filterable placeholder="选择版本名称" @change="onFormVersion">
+            <el-option v-for="v in formVersions" :key="v.id" :label="v.name || v.version_no" :value="v.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="版本">
+          <el-select v-model="form.version_id" disabled style="width:100%" placeholder="选版本名称后自动带出">
             <el-option v-for="v in formVersions" :key="v.id" :label="v.version_no" :value="v.id" />
           </el-select>
         </el-form-item>
@@ -190,7 +195,7 @@ async function save() {
     ElMessage.success('保存成功')
   } else {
     await request.post('/handovers', form.value)
-    ElMessage.success('已提交提测，并启动测试流程（环节0：验证开发提测）')
+    ElMessage.success('已提交提测，请到「测试流程」推进提测环节（通过/驳回）')
   }
   dialog.value = false; load()
 }

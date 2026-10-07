@@ -18,6 +18,7 @@
         <el-button type="primary" @click="load">查询</el-button>
       </div>
       <div class="toolbar-actions">
+        <el-button :loading="syncing" @click="syncFromXuqiu">从 xuqiu 同步</el-button>
         <el-button type="primary" @click="openDialog()">新增需求</el-button>
       </div>
     </div>
@@ -125,6 +126,25 @@ const uploadHeaders = { Authorization: `Bearer ${localStorage.getItem('token') |
 const fileList = ref([])
 
 function prioType(p) { return { P0: 'danger', P1: 'warning', P2: 'primary', P3: 'info' }[p] || '' }
+
+/* 从 xuqiu 需求系统同步：拉取全量需求，幂等 upsert（本地状态/优先级/模块不动） */
+const syncing = ref(false)
+async function syncFromXuqiu() {
+  syncing.value = true
+  try {
+    const res = await request.post('/sync/run')
+    const parts = [`新增 ${res.created_count}`, `更新 ${res.updated_count}`, `无变化 ${res.skipped_count}`]
+    if (res.cases_count) parts.push(`AI 生成用例 ${res.cases_count} 条`)
+    if (res.missing_count) parts.push(`源已删除 ${res.missing_count}`)
+    if (res.failed_count) parts.push(`失败 ${res.failed_count}`)
+    ElMessage.success(`同步完成：${parts.join('，')}`)
+    load()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '同步失败，请确认 xuqiu 服务已启动')
+  } finally {
+    syncing.value = false
+  }
+}
 async function load() {
   loading.value = true
   try { const res = await request.get('/requirements', { params: query.value }); items.value = res.items; total.value = res.total }

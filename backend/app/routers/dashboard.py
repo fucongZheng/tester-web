@@ -9,7 +9,7 @@ from ..models import (Project, Version, Requirement, TestCase, Execution,
                       Bug, FlowInstance, Module)
 from ..deps import require_admin
 from ..helpers import row_to_dict, apply_module_filter
-from .flow import stage_label
+from ..flow_stages import stage_label
 
 router = APIRouter(prefix="/api/dashboard", tags=["看板"], dependencies=[Depends(require_admin)])
 

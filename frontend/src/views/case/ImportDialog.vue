@@ -13,8 +13,13 @@
           <el-col :span="12"><el-form-item label="项目" required>
             <el-select v-model="form.project_id" style="width:100%" filterable @change="onProjectChange">
               <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="版本" required>
-            <el-select v-model="form.version_id" style="width:100%" filterable>
+          <el-col :span="12"><el-form-item label="版本名称" required>
+            <el-select v-model="form.version_id" style="width:100%" filterable placeholder="选择版本名称">
+              <el-option v-for="v in versions" :key="v.id" :label="v.name || v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
+        </el-row>
+        <el-row :gutter="10">
+          <el-col :span="12"><el-form-item label="版本">
+            <el-select v-model="form.version_id" disabled style="width:100%" placeholder="选版本名称后自动带出">
               <el-option v-for="v in versions" :key="v.id" :label="v.version_no" :value="v.id" /></el-select></el-form-item></el-col>
         </el-row>
         <el-form-item label="模块策略">

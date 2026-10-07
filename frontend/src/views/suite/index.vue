@@ -129,64 +129,51 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="execDialog" :title="`执行套件：${execSuite.name || ''}`" width="780px">
-      <el-table :data="execCases" border size="small" max-height="420">
+    <!-- 批量执行：一屏勾结果 + 填实际结果，统一提交 -->
+    <el-dialog v-model="execDialog" :title="`执行套件：${execSuite.name || ''}（${execSuite.suite_type || ''}）`" width="1060px" top="5vh">
+      <div class="exec-bar">
+        <span class="exec-bar-item">轮次
+          <el-input-number v-model="execRound" :min="1" size="small" style="width:100px" />
+        </span>
+        <span class="exec-count">已选结果 <b>{{ pickedCount }}</b> / {{ execCases.length }} 条</span>
+        <span v-if="execWarned" class="exec-warn">红色行为未执行用例，请逐条选择结果后再提交</span>
+      </div>
+      <el-table :data="execCases" border size="small" max-height="500" v-loading="execLoading"
+                :row-class-name="execRowClass">
+        <el-table-column type="expand" width="40">
+          <template #default="{ row }">
+            <div class="exec-detail">
+              <div><b>前置条件</b><pre class="readonly-text">{{ row.precondition || '无' }}</pre></div>
+              <div><b>操作步骤</b><pre class="readonly-text">{{ row.steps || '无' }}</pre></div>
+              <div><b>预期结果</b><pre class="readonly-text">{{ row.expected || '无' }}</pre></div>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="case_no" label="编号" width="100" />
-        <el-table-column prop="title" label="用例标题" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="case_type" label="类型" width="80" />
-        <el-table-column label="最近结果" width="90">
+        <el-table-column prop="title" label="用例标题" min-width="170" show-overflow-tooltip />
+        <el-table-column label="最近结果" width="88" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.last_result" :type="resultType(row.last_result)" size="small">{{ row.last_result }}</el-tag>
-            <span v-else style="color:#c0c4cc">未执行</span>
+            <el-tag v-if="row.last_result && row.last_result !== '未执行'" :type="resultType(row.last_result)" size="small">{{ row.last_result }}</el-tag>
+            <span v-else class="exec-none">未执行</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80">
+        <el-table-column label="执行结果" width="248">
           <template #default="{ row }">
-            <el-button link type="warning" @click="openCaseExec(row)">执行</el-button>
+            <el-radio-group v-model="row.pick" size="small">
+              <el-radio-button v-for="r in pickOptions" :key="r" :value="r" :class="`pick-${r}`">{{ r }}</el-radio-button>
+            </el-radio-group>
+          </template>
+        </el-table-column>
+        <el-table-column label="实际结果" min-width="170">
+          <template #default="{ row }">
+            <el-input v-model="row.actual" size="small" placeholder="选填，失败/阻塞时建议填写" />
           </template>
         </el-table-column>
       </el-table>
-    </el-dialog>
-
-    <el-dialog v-model="caseExecDialog" :title="`执行：${execCase.title || ''}`" width="700px">
-      <el-descriptions :column="1" border size="small" class="case-info">
-        <el-descriptions-item label="前置条件">
-          <pre class="readonly-text">{{ execCase.precondition || '无' }}</pre>
-        </el-descriptions-item>
-        <el-descriptions-item label="操作步骤">
-          <pre class="readonly-text">{{ execCase.steps || '无' }}</pre>
-        </el-descriptions-item>
-        <el-descriptions-item label="预期结果">
-          <pre class="readonly-text">{{ execCase.expected || '无' }}</pre>
-        </el-descriptions-item>
-      </el-descriptions>
-      <el-form :inline="true" class="exec-form">
-        <el-form-item label="结果">
-          <el-select v-model="execForm.result" style="width:120px">
-            <el-option v-for="r in execResults" :key="r" :label="r" :value="r" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="轮次">
-          <el-input-number v-model="execForm.round_no" :min="1" style="width:120px" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="saveExec">提交执行</el-button>
-        </el-form-item>
-      </el-form>
-      <el-form>
-        <el-form-item label="实际结果">
-          <el-input v-model="execForm.actual" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <el-table :data="executions" size="small" border max-height="220">
-        <el-table-column prop="round_no" label="轮次" width="60" />
-        <el-table-column prop="result" label="结果" width="80">
-          <template #default="{ row }"><el-tag :type="resultType(row.result)" size="small">{{ row.result }}</el-tag></template>
-        </el-table-column>
-        <el-table-column prop="actual" label="实际结果" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="executor" label="执行人" width="90" />
-        <el-table-column prop="executed_at" label="时间" width="150" />
-      </el-table>
+      <template #footer>
+        <el-button @click="execDialog = false">取消</el-button>
+        <el-button type="primary" :loading="execSubmitting" @click="submitExec">提交执行记录</el-button>
+      </template>
     </el-dialog>
   </el-card>
 </template>
@@ -215,9 +202,9 @@ const caseTypes = ref([])
 const syncingSelection = ref(false)
 const execDialog = ref(false); const execSuite = ref({})
 const execCases = ref([])
-const caseExecDialog = ref(false); const execCase = ref({})
-const executions = ref([]); const execResults = ref([])
-const execForm = ref({ result: '通过', round_no: 1, actual: '' })
+const execLoading = ref(false); const execSubmitting = ref(false); const execWarned = ref(false)
+const execRound = ref(1)
+const execResults = ref([])
 
 function resultType(r) { return { 通过: 'success', 失败: 'danger', 阻塞: 'warning', 跳过: 'info', 未执行: 'info' }[r] || '' }
 function passRateType(row) {
@@ -342,34 +329,48 @@ async function del(row) {
   await ElMessageBox.confirm(`确定删除套件「${row.name}」？`, '提示', { type: 'warning' })
   await request.delete(`/suites/${row.id}`); ElMessage.success('已删除'); load()
 }
+// 可勾选的执行结果（未执行不算，靠提交校验兜住）
+const pickOptions = computed(() => (execResults.value || []).filter(r => r !== '未执行'))
+const pickedCount = computed(() => execCases.value.filter(c => c.pick).length)
+
 async function openExec(row) {
   execSuite.value = row
-  execCases.value = (row.cases || []).map(c => ({ ...c, last_result: '' }))
+  execCases.value = []
+  execRound.value = 1
+  execWarned.value = false
   execDialog.value = true
-  for (const c of execCases.value) {
-    const res = await request.get('/executions', { params: { case_id: c.id } })
-    c.last_result = res.items?.[0]?.result || ''
-  }
+  execLoading.value = true
+  try {
+    const res = await request.get(`/suites/${row.id}/executions`)
+    // 已有最近结果的用例带出该结果，未执行的留空（展示为未执行，等勾选）
+    execCases.value = (res.items || []).map(c => ({
+      ...c,
+      pick: c.last_result && c.last_result !== '未执行' ? c.last_result : '',
+      actual: '',
+    }))
+    if (!execCases.value.length) ElMessage.info('该套件还没有选择用例')
+  } finally { execLoading.value = false }
 }
-async function openCaseExec(row) {
-  execCase.value = row
-  if (!row.precondition && !row.steps && !row.expected) {
-    const resCase = await request.get('/cases', { params: { keyword: row.case_no || row.title, size: 1 } })
-    const hit = (resCase.items || []).find(c => c.id === row.id)
-    if (hit) execCase.value = { ...row, ...hit }
-  }
-  execForm.value = { result: '通过', round_no: 1, actual: '' }
-  const res = await request.get('/executions', { params: { case_id: row.id } })
-  executions.value = res.items
-  caseExecDialog.value = true
+function execRowClass({ row }) {
+  return execWarned.value && !row.pick ? 'exec-row-pending' : ''
 }
-async function saveExec() {
-  await request.post('/executions', { case_id: execCase.value.id, ...execForm.value })
-  ElMessage.success('执行已提交')
-  const res = await request.get('/executions', { params: { case_id: execCase.value.id } })
-  executions.value = res.items
-  execCase.value.last_result = execForm.value.result
-  execForm.value = { result: '通过', round_no: 1, actual: '' }
+async function submitExec() {
+  if (!execCases.value.length) return ElMessage.warning('该套件没有用例，无可提交的执行记录')
+  const pending = execCases.value.filter(c => !c.pick)
+  if (pending.length) {
+    execWarned.value = true
+    return ElMessage.warning(`还有 ${pending.length} 条用例未执行（如「${pending[0].title}」），请先选择执行结果`)
+  }
+  execSubmitting.value = true
+  try {
+    const res = await request.post(`/suites/${execSuite.value.id}/executions`, {
+      round_no: execRound.value,
+      items: execCases.value.map(c => ({ case_id: c.id, result: c.pick, actual: c.actual || '' })),
+    })
+    ElMessage.success(`已提交 ${res.created} 条执行记录`)
+    execDialog.value = false
+    load()
+  } finally { execSubmitting.value = false }
 }
 onMounted(async () => {
   projects.value = await request.get('/projects/all')
@@ -397,10 +398,43 @@ onMounted(async () => {
 
 <style scoped>
 .pager { margin-top: 14px; justify-content: flex-end; }
-.exec-form { margin: 14px 0 8px; }
-.case-info { margin-bottom: 8px; }
 .readonly-text { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: inherit; color: #303133; line-height: 1.6; }
 .case-picker { width: 100%; }
 .case-picker-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
 .picked { color: var(--c-orange-500); font-size: 13px; margin-left: auto; }
+
+/* 批量执行弹窗 */
+.exec-bar { display: flex; align-items: center; gap: 18px; margin-bottom: 10px; font-size: 13px; }
+.exec-bar-item { display: inline-flex; align-items: center; gap: 6px; }
+.exec-count b { color: var(--c-orange-500); }
+.exec-warn { color: var(--el-color-danger, #f56c6c); }
+.exec-none { color: #c0c4cc; }
+.exec-detail { padding: 4px 14px; }
+.exec-detail > div { margin-bottom: 6px; }
+.exec-detail b {
+  display: inline-block; font-size: 12px; color: #606266; font-weight: 600;
+  background: #f4f4f5; border-left: 3px solid #909399; border-radius: 3px;
+  padding: 1px 8px; margin-bottom: 4px;
+}
+
+/* 未执行行高亮（提交被拦后） */
+:deep(.el-table .exec-row-pending td.el-table__cell) { background: #fef0f0; }
+
+/* 执行结果按钮选中态着色，便于扫读 */
+:deep(.pick-通过.is-active .el-radio-button__inner) {
+  background: var(--el-color-success); border-color: var(--el-color-success);
+  box-shadow: -1px 0 0 0 var(--el-color-success);
+}
+:deep(.pick-失败.is-active .el-radio-button__inner) {
+  background: var(--el-color-danger); border-color: var(--el-color-danger);
+  box-shadow: -1px 0 0 0 var(--el-color-danger);
+}
+:deep(.pick-阻塞.is-active .el-radio-button__inner) {
+  background: var(--el-color-warning); border-color: var(--el-color-warning);
+  box-shadow: -1px 0 0 0 var(--el-color-warning);
+}
+:deep(.pick-跳过.is-active .el-radio-button__inner) {
+  background: var(--el-color-info); border-color: var(--el-color-info);
+  box-shadow: -1px 0 0 0 var(--el-color-info);
+}
 </style>

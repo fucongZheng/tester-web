@@ -26,6 +26,16 @@ def _parse_ids(raw):
         return []
 
 
+def _resolve_targets(db: Session, review_type: str, ids):
+    if not ids:
+        return []
+    if review_type == "需求评审":
+        rows = db.query(Requirement).filter(Requirement.id.in_(ids)).all()
+        return [{"id": x.id, "no": x.req_no, "name": x.name} for x in rows]
+    rows = db.query(TestCase).filter(TestCase.id.in_(ids)).all()
+    return [{"id": x.id, "no": x.case_no, "name": x.title} for x in rows]
+
+
 def _to_dict(r: ReviewRecord, db: Session):
     d = row_to_dict(r)
     d["project_name"] = r.project.name if r.project else ""
@@ -33,15 +43,11 @@ def _to_dict(r: ReviewRecord, db: Session):
     d["module_name"] = r.module.name if r.module else ""
     ids = _parse_ids(r.target_ids)
     d["target_ids"] = ids
-    targets = []
-    if ids:
-        if r.review_type == "需求评审":
-            rows = db.query(Requirement).filter(Requirement.id.in_(ids)).all()
-            targets = [{"id": x.id, "no": x.req_no, "name": x.name} for x in rows]
-        else:
-            rows = db.query(TestCase).filter(TestCase.id.in_(ids)).all()
-            targets = [{"id": x.id, "no": x.case_no, "name": x.title} for x in rows]
-    d["targets"] = targets
+    d["targets"] = _resolve_targets(db, r.review_type, ids)
+    if r.review_type == "用例评审":
+        normal = _parse_ids(r.normal_ids)
+        d["normal_target_ids"] = normal
+        d["normal_targets"] = _resolve_targets(db, r.review_type, normal)
     return d
 
 
@@ -82,6 +88,8 @@ def create_review(payload: dict, db: Session = Depends(get_db), cur=Depends(get_
     if not (payload.get("title") or "").strip():
         raise HTTPException(status_code=400, detail="评审标题必填")
     ids = _parse_ids(payload.get("target_ids") or [])
+    # 核心用例与常规用例互斥，防御性去重
+    normal_ids = [i for i in _parse_ids(payload.get("normal_ids") or []) if i not in ids]
     rec = ReviewRecord(
         review_type=review_type,
         title=payload["title"].strip(),
@@ -89,6 +97,7 @@ def create_review(payload: dict, db: Session = Depends(get_db), cur=Depends(get_
         version_id=empty_to_none(payload.get("version_id")),
         module_id=empty_to_none(payload.get("module_id")),
         target_ids=json.dumps(ids),
+        normal_ids=json.dumps(normal_ids),
         reviewer=payload.get("reviewer") or (cur.real_name or cur.username),
         participants=payload.get("participants", ""),
         result=payload.get("result", "待评审"),
@@ -121,8 +130,40 @@ def update_review(rid: int, payload: dict, db: Session = Depends(get_db), _=Depe
                 setattr(rec, k, payload[k])
     if "target_ids" in payload:
         rec.target_ids = json.dumps(_parse_ids(payload.get("target_ids") or []))
+    if "normal_ids" in payload:
+        core = set(_parse_ids(rec.target_ids))
+        rec.normal_ids = json.dumps([i for i in _parse_ids(payload.get("normal_ids") or []) if i not in core])
     db.commit()
     return {"id": rid}
+
+
+@router.get("/{rid}/cases")
+def review_cases(rid: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
+    """评审用例明细（预览用）：核心用例在前、常规在后，带完整执行步骤等字段。"""
+    rec = db.query(ReviewRecord).filter(ReviewRecord.id == rid).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="评审记录不存在")
+    if rec.review_type != "用例评审":
+        raise HTTPException(status_code=400, detail="只有用例评审支持预览用例")
+    core_ids = _parse_ids(rec.target_ids)
+    normal_ids = [i for i in _parse_ids(rec.normal_ids) if i not in core_ids]
+    all_ids = core_ids + normal_ids
+    rows = db.query(TestCase).filter(TestCase.id.in_(all_ids or [0])).all() if all_ids else []
+    by_id = {c.id: c for c in rows}
+
+    def _detail(c):
+        d = row_to_dict(c)
+        d["module_name"] = c.module.name if c.module else ""
+        d["version_name"] = c.version.version_no if c.version else ""
+        return d
+
+    items = []
+    for group, group_ids in (("core", core_ids), ("normal", normal_ids)):
+        for cid in group_ids:
+            c = by_id.get(cid)
+            if c:
+                items.append({"group": group, "case": _detail(c)})
+    return {"title": rec.title, "core_count": len(core_ids), "normal_count": len(normal_ids), "items": items}
 
 
 @router.delete("/{rid}")

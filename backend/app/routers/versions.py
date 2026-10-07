@@ -47,7 +47,7 @@ def version_statuses(_=Depends(get_current_user)):
 
 
 @router.post("")
-def create_version(payload: dict, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def create_version(payload: dict, db: Session = Depends(get_db), cur=Depends(get_current_user)):
     if not payload.get("version_no") or not payload.get("project_id"):
         raise HTTPException(status_code=400, detail="版本号和所属项目必填")
     if not payload.get("launch_date"):
@@ -64,6 +64,9 @@ def create_version(payload: dict, db: Session = Depends(get_db), _=Depends(get_c
     )
     db.add(v)
     db.commit()
+    # 版本创建即自动启动测试流程，从「测试用例编写」开始
+    from .flow import create_flow
+    create_flow(db, v.project_id, v.id, operator=cur.real_name or cur.username)
     return {"id": v.id}
 
 

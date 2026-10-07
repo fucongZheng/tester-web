@@ -65,6 +65,22 @@ class OperationLog(Base):
     created_at = Column(DateTime, default=now)
 
 
+class SyncLog(Base):
+    """需求同步日志：每次从 xuqiu 拉取的结果（新增/更新/无变化/源删除/失败）"""
+    __tablename__ = "sync_log"
+    id = Column(Integer, primary_key=True, index=True)
+    trigger = Column(String(16), default="manual")  # manual / schedule
+    status = Column(String(16), default="ok")  # ok / failed
+    created_count = Column(Integer, default=0)
+    updated_count = Column(Integer, default=0)
+    skipped_count = Column(Integer, default=0)
+    missing_count = Column(Integer, default=0)  # 源已删除（本地保留）
+    failed_count = Column(Integer, default=0)
+    cases_count = Column(Integer, default=0)  # 本次同步 AI 生成的用例数
+    detail = Column(Text, default="")
+    created_at = Column(DateTime, default=now)
+
+
 class Project(Base):
     __tablename__ = "project"
     id = Column(Integer, primary_key=True, index=True)
@@ -119,6 +135,9 @@ class Requirement(Base):
     version_id = Column(Integer, ForeignKey("version.id"), nullable=False)
     module_id = Column(Integer, ForeignKey("module.id"), nullable=True)
     attachments = Column(Text, default="[]")  # JSON [{name,url,size}]
+    # 需求同步：来源系统标识 + 源系统内的需求 id（xuqiu 的 req_xxx），幂等 upsert 靠它
+    source_system = Column(String(32), default="")
+    source_id = Column(String(64), default="")
     created_at = Column(DateTime, default=now)
     updated_at = Column(DateTime, default=now, onupdate=now)
 
@@ -157,7 +176,7 @@ class Execution(Base):
     id = Column(Integer, primary_key=True, index=True)
     case_id = Column(Integer, ForeignKey("test_case.id"), nullable=False)
     round_no = Column(Integer, default=1)
-    stage_no = Column(Integer, default=3)  # 对应流程环节，人工测试=3
+    stage_no = Column(Integer, default=5)  # 对应流程环节编号，见 flow_stages.py（人工测试=5）
     result = Column(String(16), default="未执行")  # 通过/失败/阻塞/跳过/未执行
     actual = Column(Text, default="")
     executor = Column(String(64), default="")
@@ -205,6 +224,7 @@ class TestReport(Base):
     version_id = Column(Integer, ForeignKey("version.id"), nullable=False)
     content = Column(Text, default="")  # Markdown
     summary = Column(Text, default="{}")  # JSON 聚合摘要
+    module_ids = Column(Text, default="[]")  # JSON，报告口径的模块，空=整版本
     generator = Column(String(64), default="")
     method = Column(String(16), default="AI")  # AI/手动
     created_at = Column(DateTime, default=now)
@@ -218,7 +238,7 @@ class FlowInstance(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
     version_id = Column(Integer, ForeignKey("version.id"), nullable=False)
-    current_stage = Column(Integer, default=1)
+    current_stage = Column(Integer, default=0)  # 环节编号，见 flow_stages.py
     current_round = Column(Integer, default=1)
     status = Column(String(16), default="进行中")  # 进行中/已完成/已挂起
     started_at = Column(DateTime, default=now)
@@ -307,7 +327,8 @@ class ReviewRecord(Base):
     project_id = Column(Integer, ForeignKey("project.id"), nullable=False)
     version_id = Column(Integer, ForeignKey("version.id"), nullable=True)
     module_id = Column(Integer, ForeignKey("module.id"), nullable=True)
-    target_ids = Column(Text, default="[]")  # 需求或用例 ID JSON
+    target_ids = Column(Text, default="[]")  # 需求/用例 ID JSON；用例评审时=核心用例
+    normal_ids = Column(Text, default="[]")  # 用例评审的常规用例 ID JSON
     reviewer = Column(String(64), default="")
     participants = Column(String(255), default="")
     result = Column(String(16), default="待评审")  # 待评审/通过/有条件通过/不通过
@@ -344,7 +365,7 @@ class TestSuite(Base):
 
 
 class LaunchRequest(Base):
-    """上线申请：流程第 6 环节卡点"""
+    """上线申请：流程「上线+生产环境验证」环节的卡点"""
     __tablename__ = "launch_request"
     id = Column(Integer, primary_key=True, index=True)
     launch_no = Column(String(32), unique=True, default="")
