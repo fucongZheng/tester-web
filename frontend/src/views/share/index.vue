@@ -6,20 +6,14 @@
     </div>
     <el-alert v-if="error" :title="error" type="error" show-icon style="margin-bottom:16px" />
     <el-table v-else :data="data.items" v-loading="loading" border stripe :row-class-name="rowClass">
-      <el-table-column prop="bug_no" label="编号" width="90">
-        <template #default="{ row }">
-          <span :class="['bug-no', { viewed: viewedIds.has(row.id) }]">{{ row.bug_no }}</span>
-        </template>
-      </el-table-column>
+      <el-table-column prop="bug_no" label="编号" width="90" />
       <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
       <el-table-column label="复现步骤" min-width="240">
         <template #default="{ row }">
           <div class="steps-brief">{{ stepsBrief(row.steps) }}</div>
           <div class="steps-meta">
             <el-tag v-if="imgCount(row.steps)" size="small" type="info">{{ imgCount(row.steps) }} 张截图</el-tag>
-            <el-button link :type="viewedIds.has(row.id) ? 'success' : 'primary'" @click="openSteps(row)">
-              {{ viewedIds.has(row.id) ? '✓ 再次查看' : '查看详情' }}
-            </el-button>
+            <el-button link type="primary" @click="openSteps(row)">查看详情</el-button>
           </div>
         </template>
       </el-table-column>
@@ -159,11 +153,9 @@ onMounted(load)
 .steps-brief { color: var(--c-text-2); font-size: 13px; line-height: 1.5; }
 .steps-meta { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
 .steps-full { line-height: 1.7; color: var(--c-text); }
-/* 看过详情的行：淡橙底持续标记；刚看完的一条更深，滚动定位的落点 */
+/* 看过详情的行：整行淡橙底持续标记；刚看完的一条略深，也是滚动定位的落点 */
 .share-page :deep(.el-table__row.viewed-row > td.el-table__cell) { background-color: #fffaf3 !important; }
 .share-page :deep(.el-table__row.last-viewed-row > td.el-table__cell) { background-color: #ffefe2 !important; }
-.share-page :deep(.el-table__row.last-viewed-row > td.el-table__cell.el-table__cell) { transition: background-color .6s; }
-.bug-no.viewed::after { content: ' ✓'; color: var(--c-success, #67c23a); font-weight: 600; }
 .steps-full :deep(img) { max-width: 100%; height: auto; display: block; margin: 10px 0; border: 1px solid var(--c-border); border-radius: var(--r-xs); cursor: zoom-in; }
 .steps-full :deep(ul), .steps-full :deep(ol) { padding-left: 18px; }
 .steps-full :deep(p) { margin: 0 0 8px; }
