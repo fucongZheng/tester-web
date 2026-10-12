@@ -5,15 +5,21 @@
       <p class="meta">分享人 {{ data.created_by || '-' }} · {{ data.created_at }}{{ data.expires_at ? ' · 有效至 ' + data.expires_at : '' }} · 免登录，可改状态 / 修复人 / 备注</p>
     </div>
     <el-alert v-if="error" :title="error" type="error" show-icon style="margin-bottom:16px" />
-    <el-table v-else :data="data.items" v-loading="loading" border stripe>
-      <el-table-column prop="bug_no" label="编号" width="90" />
+    <el-table v-else :data="data.items" v-loading="loading" border stripe :row-class-name="rowClass">
+      <el-table-column prop="bug_no" label="编号" width="90">
+        <template #default="{ row }">
+          <span :class="['bug-no', { viewed: viewedIds.has(row.id) }]">{{ row.bug_no }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="title" label="标题" min-width="140" show-overflow-tooltip />
       <el-table-column label="复现步骤" min-width="240">
         <template #default="{ row }">
           <div class="steps-brief">{{ stepsBrief(row.steps) }}</div>
           <div class="steps-meta">
             <el-tag v-if="imgCount(row.steps)" size="small" type="info">{{ imgCount(row.steps) }} 张截图</el-tag>
-            <el-button link type="primary" @click="openSteps(row)">查看详情</el-button>
+            <el-button link :type="viewedIds.has(row.id) ? 'success' : 'primary'" @click="openSteps(row)">
+              {{ viewedIds.has(row.id) ? '✓ 再次查看' : '查看详情' }}
+            </el-button>
           </div>
         </template>
       </el-table-column>
@@ -45,7 +51,7 @@
       </el-table-column>
     </el-table>
 
-    <el-drawer v-model="drawer" :title="`复现步骤 · ${current.bug_no || ''} ${current.title || ''}`" size="720px">
+    <el-drawer v-model="drawer" :title="`复现步骤 · ${current.bug_no || ''} ${current.title || ''}`" size="720px" @closed="onDrawerClosed">
       <div class="steps-full" v-html="safeSteps(current.steps)" @click="onImgClick" />
       <el-image-viewer v-if="preview" :url-list="previewList" :initial-index="previewIndex" @close="preview = false" />
     </el-drawer>
@@ -53,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -68,6 +74,8 @@ const current = ref({})
 const preview = ref(false)
 const previewList = ref([])
 const previewIndex = ref(0)
+const viewedIds = ref(new Set()) // 看过详情的 BUG，列表里持续标记
+const lastViewedId = ref(null)   // 最近一条：关闭抽屉后滚动定位到它
 
 function sevType(s) { return { 致命: 'danger', 严重: 'warning', 一般: 'primary', 轻微: 'info', 建议: 'success' }[s] || '' }
 function safeSteps(html) {
@@ -89,7 +97,22 @@ function imgCount(html) {
 }
 function openSteps(row) {
   current.value = row
+  viewedIds.value = new Set(viewedIds.value).add(row.id)
+  lastViewedId.value = row.id
   drawer.value = true
+}
+function onDrawerClosed() {
+  // 关闭详情回到列表时，滚动定位到刚看完的那条，避免长列表里找不到位置
+  nextTick(() => {
+    document.querySelector('.share-page .el-table__row.last-viewed-row')
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  })
+}
+function rowClass({ row }) {
+  return [
+    viewedIds.value.has(row.id) ? 'viewed-row' : '',
+    row.id === lastViewedId.value ? 'last-viewed-row' : '',
+  ]
 }
 function onImgClick(e) {
   const img = e.target?.closest?.('img')
@@ -136,6 +159,11 @@ onMounted(load)
 .steps-brief { color: var(--c-text-2); font-size: 13px; line-height: 1.5; }
 .steps-meta { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
 .steps-full { line-height: 1.7; color: var(--c-text); }
+/* 看过详情的行：淡橙底持续标记；刚看完的一条更深，滚动定位的落点 */
+.share-page :deep(.el-table__row.viewed-row > td.el-table__cell) { background-color: #fffaf3 !important; }
+.share-page :deep(.el-table__row.last-viewed-row > td.el-table__cell) { background-color: #ffefe2 !important; }
+.share-page :deep(.el-table__row.last-viewed-row > td.el-table__cell.el-table__cell) { transition: background-color .6s; }
+.bug-no.viewed::after { content: ' ✓'; color: var(--c-success, #67c23a); font-weight: 600; }
 .steps-full :deep(img) { max-width: 100%; height: auto; display: block; margin: 10px 0; border: 1px solid var(--c-border); border-radius: var(--r-xs); cursor: zoom-in; }
 .steps-full :deep(ul), .steps-full :deep(ol) { padding-left: 18px; }
 .steps-full :deep(p) { margin: 0 0 8px; }
