@@ -62,26 +62,15 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList } from '../../composables/useCrudList'
 
 const { isAdmin } = useAdmin()
 
-const items = ref([])
-const total = ref(0)
-const loading = ref(false)
-const dialog = ref(false)
+const { items, total, loading, dialog, query, load } = useCrudList('/projects', { type: '' })
 const types = ref([])
 const users = ref([])
-const query = ref({ page: 1, size: 10, keyword: '', type: '' })
 const form = ref({})
 
-async function load() {
-  loading.value = true
-  try {
-    const res = await request.get('/projects', { params: query.value })
-    items.value = res.items
-    total.value = res.total
-  } finally { loading.value = false }
-}
 function openDialog(row) {
   if (row) {
     const memberList = (row.members || '').split(/[,，]/).map(s => s.trim()).filter(Boolean)
@@ -107,8 +96,12 @@ async function del(row) {
   load()
 }
 onMounted(async () => {
-  types.value = await request.get('/projects/types')
-  users.value = await request.get('/users/all')
+  const [tps, usrs] = await Promise.all([
+    request.get('/projects/types'),
+    request.get('/users/all'),
+  ])
+  types.value = tps
+  users.value = usrs
   load()
 })
 </script>

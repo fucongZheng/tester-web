@@ -63,13 +63,16 @@ function buildRoutes(menus) {
 
 let loaded = false
 
-export async function loadDynamicRoutes() {
-  if (loaded) return
+export async function loadDynamicRoutes(force = false) {
+  if (loaded && !force) return
   const userStore = useUserStore()
   const menus = await request.get('/auth/menus')
   userStore.setMenus(menus)
-  const routes = buildRoutes(menus)
-  routes.forEach((r) => router.addRoute('Layout', r))
+  // 换账号重新加载时先移除旧的动态路由，避免上一用户的菜单/权限残留
+  router.getRoutes()
+    .filter((r) => typeof r.name === 'string' && r.name.startsWith('m-'))
+    .forEach((r) => router.removeRoute(r.name))
+  buildRoutes(menus).forEach((r) => router.addRoute('Layout', r))
   loaded = true
 }
 
@@ -95,7 +98,9 @@ router.beforeEach(async (to) => {
   }
   const home = firstMenuPath(userStore.menus)
   if ((to.path === '/' || to.path === '/dashboard') && !userStore.isAdmin) {
-    return home || '/login'
+    // home 与当前路径相同（如角色菜单首项就是 /dashboard）时放行，否则 infinite redirect
+    if (home && home !== to.path) return home
+    return home ? true : '/login'
   }
   if (to.name === 'NotFound' && home && to.path !== home) {
     const hit = router.getRoutes().some((r) => r.path === to.path && r.name !== 'NotFound')

@@ -106,23 +106,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList, useProjectCascade } from '../../composables/useCrudList'
 import RichEditor from '../../components/RichEditor.vue'
 
 const { isAdmin } = useAdmin()
 const route = useRoute()
 
-const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
-const projects = ref([]); const versions = ref([]); const users = ref([]); const options = ref({ status: [], priority: [] })
-const formVersions = ref([]); const formModules = ref([]); const queryModules = ref([])
-const query = ref({ page: 1, size: 10, keyword: '', project_id: '', version_id: '', module_id: '', status: '' })
+const { items, total, loading, dialog, query, load } = useCrudList('/requirements', {
+  project_id: '', version_id: '', module_id: '', status: '',
+})
+const { versions, modules: queryModules, onProjectChange } = useProjectCascade(query, load)
+const projects = ref([]); const users = ref([]); const options = ref({ status: [], priority: [] })
+const formVersions = ref([]); const formModules = ref([])
 const form = ref({})
-const uploadHeaders = { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+// computed：组件常驻时 token 可能已刷新（重新登录），渲染时现读而不是 setup 时固化
+const uploadHeaders = computed(() => ({ Authorization: `Bearer ${localStorage.getItem('token') || ''}` }))
 const fileList = ref([])
 
 function prioType(p) { return { P0: 'danger', P1: 'warning', P2: 'primary', P3: 'info' }[p] || '' }
@@ -144,17 +148,6 @@ async function syncFromXuqiu() {
   } finally {
     syncing.value = false
   }
-}
-async function load() {
-  loading.value = true
-  try { const res = await request.get('/requirements', { params: query.value }); items.value = res.items; total.value = res.total }
-  finally { loading.value = false }
-}
-async function onProjectChange() {
-  query.value.version_id = ''; query.value.module_id = ''
-  versions.value = query.value.project_id ? await request.get('/versions/all', { params: { project_id: query.value.project_id } }) : []
-  queryModules.value = query.value.project_id ? await request.get('/modules/all', { params: { project_id: query.value.project_id } }) : []
-  load()
 }
 async function loadFormVersions() {
   form.value.version_id = ''; form.value.module_id = null
@@ -206,17 +199,26 @@ async function del(row) {
   await request.delete(`/requirements/${row.id}`); ElMessage.success('已删除'); load()
 }
 onMounted(async () => {
-  projects.value = await request.get('/projects/all')
-  users.value = await request.get('/users/all')
-  options.value = await request.get('/requirements/options')
+  const [projs, usrs, opts] = await Promise.all([
+    request.get('/projects/all'),
+    request.get('/users/all'),
+    request.get('/requirements/options'),
+  ])
+  projects.value = projs
+  users.value = usrs
+  options.value = opts
   const q = route.query || {}
   if (q.project_id) query.value.project_id = Number(q.project_id)
   if (q.version_id) query.value.version_id = Number(q.version_id)
   if (q.module_id) query.value.module_id = Number(q.module_id)
   if (q.keyword) query.value.keyword = q.keyword
   if (query.value.project_id) {
-    versions.value = await request.get('/versions/all', { params: { project_id: query.value.project_id } })
-    queryModules.value = await request.get('/modules/all', { params: { project_id: query.value.project_id } })
+    const [vs, ms] = await Promise.all([
+      request.get('/versions/all', { params: { project_id: query.value.project_id } }),
+      request.get('/modules/all', { params: { project_id: query.value.project_id } }),
+    ])
+    versions.value = vs
+    queryModules.value = ms
   }
   load()
 })

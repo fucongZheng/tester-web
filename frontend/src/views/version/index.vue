@@ -86,28 +86,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList } from '../../composables/useCrudList'
 
 const { isAdmin } = useAdmin()
 
-const items = ref([])
-const total = ref(0)
-const loading = ref(false)
-const dialog = ref(false)
+const { items, total, loading, dialog, query, load } = useCrudList('/versions', { project_id: '' })
 const projects = ref([])
 const statuses = ref([])
-const query = ref({ page: 1, size: 10, keyword: '', project_id: '' })
 const form = ref({})
 const drafting = ref(false)
 
 function statusType(s) {
   return { 已上线: 'success', 已归档: 'info', 测试中: 'warning', 开发中: 'primary', 规划中: '' }[s] || ''
-}
-async function load() {
-  loading.value = true
-  try {
-    const res = await request.get('/versions', { params: query.value })
-    items.value = res.items; total.value = res.total
-  } finally { loading.value = false }
 }
 function toDateTime(v) {
   if (!v) return ''
@@ -149,8 +139,12 @@ async function del(row) {
   await request.delete(`/versions/${row.id}`); ElMessage.success('已删除'); load()
 }
 onMounted(async () => {
-  projects.value = await request.get('/projects/all')
-  statuses.value = await request.get('/versions/statuses')
+  const [projs, sts] = await Promise.all([
+    request.get('/projects/all'),
+    request.get('/versions/statuses'),
+  ])
+  projects.value = projs
+  statuses.value = sts
   load()
 })
 </script>

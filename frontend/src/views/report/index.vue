@@ -70,7 +70,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import { downloadBlob } from '../../api/request'
 import request from '../../api/request'
 import { renderMarkdown } from '../../utils/sanitize'
 import Pager from '../../components/Pager.vue'
@@ -126,22 +126,8 @@ async function view(row) {
 }
 async function exportDocx(row) {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await axios.get(`/api/reports/${row.id}/export`, {
-      responseType: 'blob',
-      headers: { Authorization: token ? `Bearer ${token}` : '' },
-    })
-    const blob = new Blob([res.data], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${row.title || row.report_no || '测试报告'}.docx`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+    await downloadBlob(`/reports/${row.id}/export`, `${row.title || row.report_no || '测试报告'}.docx`,
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '导出失败')
   }

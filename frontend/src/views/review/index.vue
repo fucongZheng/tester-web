@@ -159,12 +159,14 @@ import Pager from '../../components/Pager.vue'
 import CasePickerDialog from '../../components/CasePickerDialog.vue'
 import CasePreview from '../../components/CasePreview.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList } from '../../composables/useCrudList'
 
 const { isAdmin } = useAdmin()
-const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
+const { items, total, loading, dialog, query, load } = useCrudList('/reviews', {
+  review_type: '', project_id: '', result: '',
+})
 const projects = ref([]); const users = ref([]); const formVersions = ref([]); const formModules = ref([]); const formTargets = ref([])
 const options = ref({ types: [], results: [] })
-const query = ref({ page: 1, size: 10, keyword: '', review_type: '', project_id: '', result: '' })
 const form = ref({})
 
 // 用例评审：核心/常规两组用例 + 弹窗选择 + 投屏预览
@@ -183,11 +185,6 @@ function resultType(r) {
 }
 function targetLabel(t) {
   return `${t.req_no || t.case_no || t.no || ''} ${t.name || t.title || ''}`.trim()
-}
-async function load() {
-  loading.value = true
-  try { const res = await request.get('/reviews', { params: query.value }); items.value = res.items; total.value = res.total }
-  finally { loading.value = false }
 }
 async function onFormProject() {
   form.value.version_id = ''; form.value.module_id = null; form.value.target_ids = []; form.value.normal_ids = []
@@ -293,9 +290,14 @@ async function del(row) {
   await request.delete(`/reviews/${row.id}`); ElMessage.success('已删除'); load()
 }
 onMounted(async () => {
-  projects.value = await request.get('/projects/all')
-  users.value = await request.get('/users/all')
-  options.value = await request.get('/reviews/options')
+  const [projs, usrs, opts] = await Promise.all([
+    request.get('/projects/all'),
+    request.get('/users/all'),
+    request.get('/reviews/options'),
+  ])
+  projects.value = projs
+  users.value = usrs
+  options.value = opts
   load()
 })
 </script>

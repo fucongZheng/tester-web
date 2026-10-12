@@ -22,7 +22,8 @@ request.interceptors.request.use((config) => {
 })
 
 request.interceptors.response.use(
-  (res) => res.data,
+  // blob 下载保留完整 response（调用方需要 headers/filename），其余剥出 data
+  (res) => (res.config.responseType === 'blob' ? res : res.data),
   (err) => {
     const status = err.response?.status
     const detail = err.response?.data?.detail || '请求失败'
@@ -40,5 +41,32 @@ request.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+/** 带鉴权的文件上传：token 每次现读，避免组件里缓存旧凭证；url 相对于 /api */
+export function uploadFile(url, formData, config = {}) {
+  const token = localStorage.getItem('token')
+  return request.post(url, formData, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    ...config,
+  })
+}
+
+/** 带鉴权的 blob 下载并触发浏览器保存：token 每次现读 */
+export async function downloadBlob(url, filename = 'download', mime = '') {
+  const token = localStorage.getItem('token')
+  const res = await request.get(url, {
+    responseType: 'blob',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  const blob = new Blob([res.data], { type: mime || res.data?.type || '' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(a.href)
+  return blob
+}
 
 export default request

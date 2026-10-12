@@ -145,7 +145,7 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import axios from 'axios'
+import { downloadBlob } from '../../api/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, WarningFilled } from '@element-plus/icons-vue'
 import request from '../../api/request'
@@ -323,21 +323,8 @@ async function doImport() {
 
 async function downloadTemplate() {
   try {
-    const token = localStorage.getItem('token') || ''
-    const res = await axios.get('/api/cases/import/template', {
-      responseType: 'blob',
-      headers: { Authorization: token ? `Bearer ${token}` : '' },
-    })
-    const url = URL.createObjectURL(new Blob([res.data], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = '测试用例导入模板.xlsx'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+    await downloadBlob('/cases/import/template', '测试用例导入模板.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   } catch (e) {
     ElMessage.error('模板下载失败')
   }

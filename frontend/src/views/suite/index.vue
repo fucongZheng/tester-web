@@ -185,14 +185,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList, useProjectCascade } from '../../composables/useCrudList'
 
 const { isAdmin } = useAdmin()
 const route = useRoute()
-const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
-const projects = ref([]); const versions = ref([]); const formVersions = ref([]); const formCases = ref([])
-const queryModules = ref([]); const formModules = ref([])
+const { items, total, loading, dialog, query, load } = useCrudList('/suites', {
+  project_id: '', version_id: '', module_id: '', suite_type: '',
+})
+const { versions, modules: queryModules, onProjectChange } = useProjectCascade(query, load)
+const projects = ref([]); const formVersions = ref([]); const formCases = ref([])
+const formModules = ref([])
 const options = ref({ suite_type: [] })
-const query = ref({ page: 1, size: 10, keyword: '', project_id: '', version_id: '', module_id: '', suite_type: '' })
 const form = ref({})
 const caseTableRef = ref()
 const caseKeyword = ref('')
@@ -275,17 +278,6 @@ watch([filteredCases, dialog], () => {
   if (dialog.value) syncCaseSelection()
 })
 
-async function load() {
-  loading.value = true
-  try { const res = await request.get('/suites', { params: query.value }); items.value = res.items; total.value = res.total }
-  finally { loading.value = false }
-}
-async function onProjectChange() {
-  query.value.version_id = ''; query.value.module_id = ''
-  versions.value = query.value.project_id ? await request.get('/versions/all', { params: { project_id: query.value.project_id } }) : []
-  queryModules.value = query.value.project_id ? await request.get('/modules/all', { params: { project_id: query.value.project_id } }) : []
-  load()
-}
 async function onFormProject() {
   form.value.version_id = ''; form.value.module_id = null; form.value.case_ids = []
   resetCasePicker()
@@ -373,10 +365,16 @@ async function submitExec() {
   } finally { execSubmitting.value = false }
 }
 onMounted(async () => {
-  projects.value = await request.get('/projects/all')
-  options.value = await request.get('/suites/options')
-  execResults.value = await request.get('/executions/options')
-  try { caseTypes.value = (await request.get('/cases/options')).case_type || [] } catch (e) { caseTypes.value = [] }
+  const [projs, opts, execOpts, caseOpts] = await Promise.all([
+    request.get('/projects/all'),
+    request.get('/suites/options'),
+    request.get('/executions/options'),
+    request.get('/cases/options').catch(() => ({})),
+  ])
+  projects.value = projs
+  options.value = opts
+  execResults.value = execOpts
+  caseTypes.value = caseOpts.case_type || []
   if (route.query.project_id) {
     query.value.project_id = Number(route.query.project_id)
     versions.value = await request.get('/versions/all', { params: { project_id: query.value.project_id } })

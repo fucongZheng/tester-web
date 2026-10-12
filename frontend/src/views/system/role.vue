@@ -75,7 +75,11 @@ async function openDialog(row) {
 }
 async function save() {
   if (!form.value.name || !form.value.code) return ElMessage.warning('角色名和编码必填')
-  const keys = treeRef.value?.getCheckedKeys() || []
+  // 半选的父目录也要带上，否则目录 id 丢失，子菜单会在后端挂成顶级菜单
+  const keys = [
+    ...(treeRef.value?.getCheckedKeys() || []),
+    ...(treeRef.value?.getHalfCheckedKeys() || []),
+  ]
   const payload = { ...form.value, menu_ids: keys }
   if (form.value.id) await request.put(`/roles/${form.value.id}`, payload)
   else await request.post('/roles', payload)

@@ -122,32 +122,24 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList, useProjectCascade } from '../../composables/useCrudList'
 import RichEditor from '../../components/RichEditor.vue'
 
 const route = useRoute()
 
 const { isAdmin } = useAdmin()
-const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
-const projects = ref([]); const versions = ref([]); const users = ref([]); const options = ref({ severity: [], status: [], stage: [] })
-const formVersions = ref([]); const formModules = ref([]); const queryModules = ref([])
-const query = ref({ page: 1, size: 10, keyword: '', project_id: '', version_id: '', module_id: '', severity: '', status: '', found_stage: '', assignee: '' })
+const { items, total, loading, dialog, query, load } = useCrudList('/bugs', {
+  project_id: '', version_id: '', module_id: '', severity: '', status: '', found_stage: '', assignee: '',
+})
+const { versions, modules: queryModules, onProjectChange } = useProjectCascade(query, load)
+const projects = ref([]); const users = ref([]); const options = ref({ severity: [], status: [], stage: [] })
+const formVersions = ref([]); const formModules = ref([])
 const form = ref({})
 const selected = ref([])
 
 function sevType(s) { return { 致命: 'danger', 严重: 'warning', 一般: 'primary', 轻微: 'info', 建议: 'success' }[s] || '' }
 function statusType(s) {
   return { 待处理: 'danger', 处理中: 'warning', 已修复未发版: 'primary', 已修复已发版: 'success', 不是BUG: 'info', 测试验证通过关闭: 'success' }[s] || ''
-}
-async function load() {
-  loading.value = true
-  try { const res = await request.get('/bugs', { params: query.value }); items.value = res.items; total.value = res.total }
-  finally { loading.value = false }
-}
-async function onProjectChange() {
-  query.value.version_id = ''; query.value.module_id = ''
-  versions.value = query.value.project_id ? await request.get('/versions/all', { params: { project_id: query.value.project_id } }) : []
-  queryModules.value = query.value.project_id ? await request.get('/modules/all', { params: { project_id: query.value.project_id } }) : []
-  load()
 }
 async function loadFormVersions() {
   form.value.version_id = ''; form.value.module_id = null
@@ -203,16 +195,25 @@ async function shareBugs() {
   }
 }
 onMounted(async () => {
-  projects.value = await request.get('/projects/all')
-  users.value = await request.get('/users/all')
-  options.value = await request.get('/bugs/options')
+  const [projs, usrs, opts] = await Promise.all([
+    request.get('/projects/all'),
+    request.get('/users/all'),
+    request.get('/bugs/options'),
+  ])
+  projects.value = projs
+  users.value = usrs
+  options.value = opts
   const q = route.query || {}
   const keys = ['project_id', 'version_id', 'module_id']
   keys.forEach((k) => { if (q[k]) query.value[k] = Number(q[k]) })
   ;['severity', 'status', 'found_stage', 'assignee', 'keyword'].forEach((k) => { if (q[k]) query.value[k] = q[k] })
   if (query.value.project_id) {
-    versions.value = await request.get('/versions/all', { params: { project_id: query.value.project_id } })
-    queryModules.value = await request.get('/modules/all', { params: { project_id: query.value.project_id } })
+    const [vs, ms] = await Promise.all([
+      request.get('/versions/all', { params: { project_id: query.value.project_id } }),
+      request.get('/modules/all', { params: { project_id: query.value.project_id } }),
+    ])
+    versions.value = vs
+    queryModules.value = ms
   }
   load()
 })

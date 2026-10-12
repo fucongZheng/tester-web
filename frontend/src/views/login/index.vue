@@ -41,10 +41,10 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { JSEncrypt } from 'jsencrypt'
 import request from '../../api/request'
 import { useUserStore } from '../../store/user'
 import { loadDynamicRoutes, firstMenuPath } from '../../router'
+import { encryptPassword, fetchRsaKey } from '../../utils/crypto'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -52,7 +52,6 @@ const form = ref({ username: '', password: '', captcha: '' })
 const loading = ref(false)
 const captchaId = ref('')
 const captchaImg = ref('')
-const rsaKey = ref('')
 
 async function loadCaptcha() {
   try {
@@ -66,28 +65,13 @@ async function loadCaptcha() {
   form.value.captcha = ''
 }
 
-async function loadRsaKey() {
-  try {
-    rsaKey.value = (await request.get('/auth/rsa-key')).public_key
-  } catch {
-    rsaKey.value = ''
-  }
-}
-
-// 密码 RSA 加密后再传输，避免报文里出现明文密码；失败返回 false
-function encryptPassword(pwd) {
-  if (!rsaKey.value) return false
-  const encryptor = new JSEncrypt()
-  encryptor.setPublicKey(rsaKey.value)
-  return encryptor.encrypt(pwd)
-}
-
 onMounted(() => {
   loadCaptcha()
-  loadRsaKey()
+  fetchRsaKey().catch(() => {}) // 提前拉公钥，登录时加密组件就绪
 })
 
 async function onLogin() {
+  if (loading.value) return // 防键盘 Enter 连击双提交
   if (!form.value.username || !form.value.password) {
     ElMessage.warning('请输入用户名和密码')
     return
@@ -96,10 +80,10 @@ async function onLogin() {
     ElMessage.warning('请输入验证码')
     return
   }
-  const encPwd = encryptPassword(form.value.password)
+  const encPwd = await encryptPassword(form.value.password)
   if (!encPwd) {
     ElMessage.warning('加密组件未就绪，请稍后重试')
-    loadRsaKey()
+    fetchRsaKey(true)
     return
   }
   loading.value = true
@@ -111,7 +95,8 @@ async function onLogin() {
       captcha_code: form.value.captcha,
     })
     userStore.setLogin(res.token, res.user)
-    await loadDynamicRoutes()
+    // force：同会话换账号登录时必须重拉菜单并重建路由，不能复用上一用户的
+    await loadDynamicRoutes(true)
     ElMessage.success('登录成功')
     router.push(firstMenuPath(userStore.menus) || '/')
   } catch {

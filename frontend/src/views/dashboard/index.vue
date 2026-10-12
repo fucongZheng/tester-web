@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div ref="rootRef">
     <div class="toolbar">
       <el-select v-model="project_id" placeholder="项目" clearable filterable style="width:180px" @change="onProject">
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
@@ -81,10 +81,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import * as echarts from 'echarts'
+// echarts 按需引入（全量包约 1MB，这里只用到饼/柱/线）
+import * as echarts from 'echarts/core'
+import { PieChart, BarChart, LineChart } from 'echarts/charts'
+import {
+  TitleComponent, TooltipComponent, GridComponent,
+  LegendComponent, DataZoomComponent,
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([PieChart, BarChart, LineChart, TitleComponent, TooltipComponent,
+             GridComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
+
 import request from '../../api/request'
 
 const router = useRouter()
@@ -105,6 +116,17 @@ const charts = {}
 const severityRef = ref(); const statusRef = ref(); const rankRef = ref()
 const moduleRef = ref(); const projectRef = ref(); const stageRef = ref()
 const trendRef = ref(); const progressRef = ref()
+const rootRef = ref()
+
+// 侧栏展开/窗口缩放后图表重排
+let resizeObserver = null
+onMounted(() => {
+  resizeObserver = new ResizeObserver(() => {
+    Object.values(charts).forEach((c) => c?.resize())
+  })
+  if (rootRef.value) resizeObserver.observe(rootRef.value)
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
 function scopeParams() {
   const p = {}
@@ -228,7 +250,9 @@ async function onProject() {
   modules.value = project_id.value ? await request.get('/modules/all', { params: { project_id: project_id.value } }) : []
   reload()
 }
+let reloadSeq = 0
 async function reload() {
+  const seq = ++reloadSeq
   const p = scopeParams()
   const [summary, sev, status, rank, mods, proj, stage, trend, progress, board, mstats] = await Promise.all([
     request.get('/dashboard/summary'),
@@ -243,6 +267,7 @@ async function reload() {
     request.get('/dashboard/flow-board'),
     request.get('/dashboard/module-stats', { params: p }),
   ])
+  if (seq !== reloadSeq) return // 快速切换筛选时丢弃过期响应，防旧数据覆盖新筛选
   cards.value[0].value = summary.project
   cards.value[1].value = summary.version
   cards.value[2].value = summary.requirement

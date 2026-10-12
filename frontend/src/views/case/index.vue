@@ -220,14 +220,17 @@ import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import ImportDialog from './ImportDialog.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList, useProjectCascade } from '../../composables/useCrudList'
 
 const { isAdmin } = useAdmin()
 const route = useRoute()
 
-const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
-const projects = ref([]); const versions = ref([]); const options = ref({ case_type: [], priority: [] })
-const formVersions = ref([]); const formModules = ref([]); const formReqs = ref([]); const queryModules = ref([])
-const query = ref({ page: 1, size: 10, keyword: '', project_id: '', version_id: '', module_id: '', case_type: '', suite_id: '' })
+const { items, total, loading, dialog, query, load } = useCrudList('/cases', {
+  project_id: '', version_id: '', module_id: '', case_type: '', suite_id: '',
+})
+const { versions, modules: queryModules, onProjectChange } = useProjectCascade(query, load)
+const projects = ref([]); const options = ref({ case_type: [], priority: [] })
+const formVersions = ref([]); const formModules = ref([]); const formReqs = ref([])
 const form = ref({})
 const execDialog = ref(false); const execCase = ref({}); const executions = ref([]); const execResults = ref([])
 const execForm = ref({ result: '通过', round_no: 1, actual: '' })
@@ -252,17 +255,6 @@ function resultType(r) { return { 通过: 'success', 失败: 'danger', 阻塞: '
 const importRef = ref()
 function openImportDialog() {
   importRef.value?.open({ project_id: query.value.project_id || '', version_id: query.value.version_id || '' })
-}
-async function load() {
-  loading.value = true
-  try { const res = await request.get('/cases', { params: query.value }); items.value = res.items; total.value = res.total }
-  finally { loading.value = false }
-}
-async function onProjectChange() {
-  query.value.version_id = ''; query.value.module_id = ''
-  versions.value = query.value.project_id ? await request.get('/versions/all', { params: { project_id: query.value.project_id } }) : []
-  queryModules.value = query.value.project_id ? await request.get('/modules/all', { params: { project_id: query.value.project_id } }) : []
-  load()
 }
 async function loadFormVersions() {
   form.value.version_id = ''; form.value.module_id = null; form.value.requirement_id = null
@@ -408,13 +400,22 @@ async function saveAiCases() {
   } finally { aiSaving.value = false }
 }
 onMounted(async () => {
-  projects.value = await request.get('/projects/all')
-  options.value = await request.get('/cases/options')
-  execResults.value = await request.get('/executions/options')
+  const [projs, opts, execOpts] = await Promise.all([
+    request.get('/projects/all'),
+    request.get('/cases/options'),
+    request.get('/executions/options'),
+  ])
+  projects.value = projs
+  options.value = opts
+  execResults.value = execOpts
   if (route.query.project_id) {
     query.value.project_id = Number(route.query.project_id)
-    versions.value = await request.get('/versions/all', { params: { project_id: query.value.project_id } })
-    queryModules.value = await request.get('/modules/all', { params: { project_id: query.value.project_id } })
+    const [vs, ms] = await Promise.all([
+      request.get('/versions/all', { params: { project_id: query.value.project_id } }),
+      request.get('/modules/all', { params: { project_id: query.value.project_id } }),
+    ])
+    versions.value = vs
+    queryModules.value = ms
   }
   if (route.query.version_id) query.value.version_id = Number(route.query.version_id)
   if (route.query.module_id) query.value.module_id = Number(route.query.module_id)

@@ -90,20 +90,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { useCrudList } from '../../composables/useCrudList'
 
 const { isAdmin } = useAdmin()
-const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
+const { items, total, loading, dialog, query, load } = useCrudList('/launches', {
+  project_id: '', version_id: '', status: '',
+})
 const projects = ref([]); const versions = ref([]); const users = ref([])
 const formVersions = ref([]); const formModules = ref([])
 const options = ref({ status: [] })
-const query = ref({ page: 1, size: 10, keyword: '', project_id: '', version_id: '', status: '' })
 const form = ref({})
 
-async function load() {
-  loading.value = true
-  try { const res = await request.get('/launches', { params: query.value }); items.value = res.items; total.value = res.total }
-  finally { loading.value = false }
-}
+// 上线申请查询区只级联版本（无模块筛选），不套 useProjectCascade 以免多拉模块
 async function onProjectChange() {
   query.value.version_id = ''
   versions.value = query.value.project_id ? await request.get('/versions/all', { params: { project_id: query.value.project_id } }) : []
@@ -138,9 +136,14 @@ async function del(row) {
   await request.delete(`/launches/${row.id}`); ElMessage.success('已删除'); load()
 }
 onMounted(async () => {
-  projects.value = await request.get('/projects/all')
-  users.value = await request.get('/users/all')
-  options.value = await request.get('/launches/options')
+  const [projs, usrs, opts] = await Promise.all([
+    request.get('/projects/all'),
+    request.get('/users/all'),
+    request.get('/launches/options'),
+  ])
+  projects.value = projs
+  users.value = usrs
+  options.value = opts
   load()
 })
 </script>

@@ -66,6 +66,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../api/request'
 import Pager from '../../components/Pager.vue'
 import { useAdmin } from '../../composables/useAdmin'
+import { encryptPassword, fetchRsaKey } from '../../utils/crypto'
 
 const { isAdmin } = useAdmin()
 const items = ref([]); const total = ref(0); const loading = ref(false); const dialog = ref(false)
@@ -91,8 +92,19 @@ async function save() {
   if (form.value.id && form.value.password && form.value.password.length < 8) {
     return ElMessage.warning('密码至少 8 位')
   }
-  if (form.value.id) await request.put(`/users/${form.value.id}`, form.value)
-  else await request.post('/users', form.value)
+  // 密码 RSA 加密传输（与登录同机制），不把明文放进请求体
+  const payload = { ...form.value }
+  delete payload.password
+  if (form.value.password) {
+    const enc = await encryptPassword(form.value.password)
+    if (!enc) {
+      await fetchRsaKey(true)
+      return ElMessage.warning('加密组件未就绪，请重试')
+    }
+    payload.password_enc = enc
+  }
+  if (form.value.id) await request.put(`/users/${form.value.id}`, payload)
+  else await request.post('/users', payload)
   ElMessage.success('保存成功'); dialog.value = false; load()
 }
 async function del(row) {

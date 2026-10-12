@@ -26,7 +26,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import { uploadFile } from '../api/request'
 import { sanitizeHtml } from '../utils/sanitize'
 
 const props = defineProps({ modelValue: { type: String, default: '' } })
@@ -106,13 +106,10 @@ async function uploadFiles(files) {
       }
       const fd = new FormData()
       fd.append('file', img)
-      const token = localStorage.getItem('token') || ''
-      const res = await axios.post('/api/uploads', fd, {
-        headers: { Authorization: token ? `Bearer ${token}` : '' },
-      })
-      const url = res.data?.url
+      const res = await uploadFile('/uploads', fd)
+      const url = res?.url
       if (!url) continue
-      const name = res.data.name || file.name
+      const name = res.name || file.name
       document.execCommand('insertHTML', false, `<p><img src="${url}" alt="${name}" /></p>`)
     }
     onInput()

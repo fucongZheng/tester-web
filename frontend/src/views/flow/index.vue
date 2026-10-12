@@ -134,7 +134,8 @@ import { useAdmin } from '../../composables/useAdmin'
 const { isAdmin } = useAdmin()
 const router = useRouter()
 
-const uploadHeaders = { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+// computed：组件常驻时 token 可能已刷新（重新登录），渲染时现读而不是 setup 时固化
+const uploadHeaders = computed(() => ({ Authorization: `Bearer ${localStorage.getItem('token') || ''}` }))
 const fileList = ref([])
 const attachments = ref([])
 

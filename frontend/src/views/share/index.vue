@@ -75,9 +75,9 @@ function safeSteps(html) {
   return cleaned || '<span style="color:#c0c4cc">无</span>'
 }
 function stripHtml(html) {
-  const d = document.createElement('div')
-  d.innerHTML = html || ''
-  return (d.textContent || '').replace(/\s+/g, ' ').trim()
+  // DOMParser 解析处于 inert document，不会加载图片/触发内联事件，避免在 live document 里解析不可信 HTML
+  const doc = new DOMParser().parseFromString(html || '', 'text/html')
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim()
 }
 function stepsBrief(html) {
   const t = stripHtml(html)
