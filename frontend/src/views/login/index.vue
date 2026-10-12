@@ -19,6 +19,15 @@
             <template #prefix><el-icon><Lock /></el-icon></template>
           </el-input>
         </el-form-item>
+        <el-form-item label="验证码">
+          <div class="captcha-row">
+            <el-input v-model="form.captcha" placeholder="请输入验证码" size="large" maxlength="4" autocomplete="off">
+              <template #prefix><el-icon><Key /></el-icon></template>
+            </el-input>
+            <img v-if="captchaImg" :src="captchaImg" class="captcha-img" title="看不清？点击刷新" alt="验证码" @click="loadCaptcha" />
+            <div v-else class="captcha-img captcha-placeholder" title="点击重新获取" @click="loadCaptcha">获取中</div>
+          </div>
+        </el-form-item>
         <el-button type="primary" size="large" class="login-btn" :loading="loading" @click="onLogin">
           登录系统
         </el-button>
@@ -29,32 +38,87 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { JSEncrypt } from 'jsencrypt'
 import request from '../../api/request'
 import { useUserStore } from '../../store/user'
 import { loadDynamicRoutes, firstMenuPath } from '../../router'
 
 const router = useRouter()
 const userStore = useUserStore()
-const form = ref({ username: '', password: '' })
+const form = ref({ username: '', password: '', captcha: '' })
 const loading = ref(false)
+const captchaId = ref('')
+const captchaImg = ref('')
+const rsaKey = ref('')
+
+async function loadCaptcha() {
+  try {
+    // 时间戳防缓存，确保点击刷新拿到新图
+    const res = await request.get('/auth/captcha', { params: { t: Date.now() } })
+    captchaId.value = res.captcha_id
+    captchaImg.value = res.image
+  } catch {
+    captchaImg.value = ''
+  }
+  form.value.captcha = ''
+}
+
+async function loadRsaKey() {
+  try {
+    rsaKey.value = (await request.get('/auth/rsa-key')).public_key
+  } catch {
+    rsaKey.value = ''
+  }
+}
+
+// 密码 RSA 加密后再传输，避免报文里出现明文密码；失败返回 false
+function encryptPassword(pwd) {
+  if (!rsaKey.value) return false
+  const encryptor = new JSEncrypt()
+  encryptor.setPublicKey(rsaKey.value)
+  return encryptor.encrypt(pwd)
+}
+
+onMounted(() => {
+  loadCaptcha()
+  loadRsaKey()
+})
 
 async function onLogin() {
   if (!form.value.username || !form.value.password) {
     ElMessage.warning('请输入用户名和密码')
     return
   }
+  if (!form.value.captcha) {
+    ElMessage.warning('请输入验证码')
+    return
+  }
+  const encPwd = encryptPassword(form.value.password)
+  if (!encPwd) {
+    ElMessage.warning('加密组件未就绪，请稍后重试')
+    loadRsaKey()
+    return
+  }
   loading.value = true
   try {
-    const res = await request.post('/auth/login', form.value)
+    const res = await request.post('/auth/login', {
+      username: form.value.username,
+      password_enc: encPwd,
+      captcha_id: captchaId.value,
+      captcha_code: form.value.captcha,
+    })
     userStore.setLogin(res.token, res.user)
     await loadDynamicRoutes()
     ElMessage.success('登录成功')
     router.push(firstMenuPath(userStore.menus) || '/')
+  } catch {
+    // 错误提示由 request 拦截器统一弹出；验证码已被消费，刷新后重输
   } finally {
     loading.value = false
+    loadCaptcha()
   }
 }
 </script>
@@ -96,6 +160,10 @@ async function onLogin() {
 .title { font-size: 22px; font-weight: 700; line-height: 1.3; margin: 0; color: var(--c-text); }
 .sub { color: var(--c-text-3); margin-top: 2px; font-size: 13px; }
 .login-btn { width: 100%; margin-top: 8px; height: 44px; font-size: 16px; font-weight: 600; }
+.captcha-row { display: flex; gap: 10px; width: 100%; align-items: center; }
+.captcha-row .el-input { flex: 1; }
+.captcha-img { height: 40px; width: 120px; border-radius: 6px; cursor: pointer; flex-shrink: 0; border: 1px solid var(--el-border-color); }
+.captcha-placeholder { display: grid; place-items: center; color: var(--c-text-4); font-size: 12px; background: var(--el-fill-color-light); }
 .hint { text-align: center; color: var(--c-text-4); font-size: 12px; margin-top: 16px; }
 :deep(.el-form-item__label) { color: var(--c-text-2); font-weight: 500; }
 </style>

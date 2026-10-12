@@ -1,14 +1,18 @@
 """需求同步端到端自测（可重复执行）：同步 → 幂等 → 增量更新且不动本地状态 → AI 用例 → 删除对账 → 日志。
 
 覆盖同步时三件事：①新增项目（自动建档）②新增需求+版本 ③调 AI 生成用例接口。
-前置：xuqiu 起在 8000，tester 起在 8001（8000 被 xuqiu 占用）：
-    cd backend && python -m uvicorn app.main:app --port 8001
+前置：xuqiu 起在 8000，tester 起在 8001（8000 被 xuqiu 占用）。
+tester 登录需图形验证码，自动化测试无法识图，起服务时固定验证码：
+    cd backend && CAPTCHA_FIXED_CODE=8888 python -m uvicorn app.main:app --port 8001
 跑法：python test_sync_e2e.py
 """
 
+import base64
 import time
 
 import httpx
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 
 TESTER = "http://127.0.0.1:8001"
 XUQIU = "http://127.0.0.1:8000"
@@ -16,7 +20,14 @@ XUQIU_KEY = {"X-API-Key": "inkproto-open-9f2c1d7a"}
 
 
 def tester_login(c):
-    token = c.post("/api/auth/login", json={"username": "admin", "password": "admin123"}).json()["token"]
+    cap = c.get("/api/auth/captcha").json()
+    code = cap.get("dev_code")
+    assert code, "tester 未以 CAPTCHA_FIXED_CODE 启动，拿不到验证码，无法自动登录"
+    pem = c.get("/api/auth/rsa-key").json()["public_key"]
+    pub = serialization.load_pem_public_key(pem.encode())
+    enc = base64.b64encode(pub.encrypt(b"admin123", padding.PKCS1v15())).decode()
+    token = c.post("/api/auth/login", json={"username": "admin", "password_enc": enc,
+                                            "captcha_id": cap["captcha_id"], "captcha_code": code}).json()["token"]
     return {"Authorization": "Bearer " + token}
 
 

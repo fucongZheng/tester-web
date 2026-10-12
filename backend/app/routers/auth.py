@@ -6,21 +6,44 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import SysUser, SysMenu
-from ..security import verify_password, create_access_token
+from ..security import verify_password, create_access_token, public_key_pem, rsa_decrypt
 from ..deps import get_current_user
 from ..helpers import build_menu_tree
 from ..ratelimit import check_login_lock, client_ip, limiter, record_login_fail, record_login_ok
+from .. import captcha
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
+
+
+@router.get("/captcha")
+def get_captcha(request: Request):
+    """图形验证码：前端登录页展示，登录时一次性校验。"""
+    if limiter.hit(f"captcha:{client_ip(request)}", 60, 600):
+        raise HTTPException(status_code=429, detail="获取过于频繁，请稍后再试")
+    captcha_id, png_b64 = captcha.generate()
+    data = {"captcha_id": captcha_id, "image": "data:image/png;base64," + png_b64}
+    if captcha.CAPTCHA_FIXED_CODE:
+        data["dev_code"] = captcha.CAPTCHA_FIXED_CODE  # 仅供自动化测试（设置了 CAPTCHA_FIXED_CODE 才返回）
+    return data
+
+
+@router.get("/rsa-key")
+def get_rsa_key():
+    """登录密码传输加密用的 RSA 公钥（进程重启后换钥，前端每次进登录页重新拉取）。"""
+    return {"public_key": public_key_pem()}
 
 
 @router.post("/login")
 def login(payload: dict, request: Request, db: Session = Depends(get_db)):
     username = (payload.get("username") or "").strip()
-    password = payload.get("password", "")
+    password = rsa_decrypt(payload.get("password_enc"))
+    if password is None:
+        raise HTTPException(status_code=400, detail="密码解密失败，请刷新页面重试")
     ip = client_ip(request)
     if limiter.hit(f"login:{ip}", 20, 600):
         raise HTTPException(status_code=429, detail="尝试过于频繁，请稍后再试")
+    if not captcha.verify(payload.get("captcha_id"), payload.get("captcha_code")):
+        raise HTTPException(status_code=400, detail="验证码错误或已过期")
     check_login_lock(username)
     user = db.query(SysUser).filter(SysUser.username == username).first()
     if not user or not verify_password(password, user.password):
