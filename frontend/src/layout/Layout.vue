@@ -63,6 +63,8 @@ async function onCommand(cmd) {
   if (cmd === 'logout') {
     await ElMessageBox.confirm('确定退出登录？', '提示', { type: 'warning' })
     userStore.logout()
+    // 整页跳转会丢 toast，登录页读到该标记后补一条提示
+    sessionStorage.setItem('logout_toast', '1')
     window.location.href = '/login'
   }
 }

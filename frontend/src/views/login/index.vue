@@ -28,6 +28,9 @@
             <div v-else class="captcha-img captcha-placeholder" title="点击重新获取" @click="loadCaptcha">获取中</div>
           </div>
         </el-form-item>
+        <el-form-item class="remember-row">
+          <el-checkbox v-model="remember">记住账号</el-checkbox>
+        </el-form-item>
         <el-button type="primary" size="large" class="login-btn" :loading="loading" @click="onLogin">
           登录系统
         </el-button>
@@ -52,6 +55,8 @@ const form = ref({ username: '', password: '', captcha: '' })
 const loading = ref(false)
 const captchaId = ref('')
 const captchaImg = ref('')
+const REMEMBER_KEY = 'remember_username'
+const remember = ref(false)
 
 async function loadCaptcha() {
   try {
@@ -66,6 +71,15 @@ async function loadCaptcha() {
 }
 
 onMounted(() => {
+  const saved = localStorage.getItem(REMEMBER_KEY)
+  if (saved) {
+    form.value.username = saved
+    remember.value = true
+  }
+  if (sessionStorage.getItem('logout_toast')) {
+    sessionStorage.removeItem('logout_toast')
+    ElMessage.success('已退出登录')
+  }
   loadCaptcha()
   fetchRsaKey().catch(() => {}) // 提前拉公钥，登录时加密组件就绪
 })
@@ -95,6 +109,8 @@ async function onLogin() {
       captcha_code: form.value.captcha,
     })
     userStore.setLogin(res.token, res.user)
+    if (remember.value) localStorage.setItem(REMEMBER_KEY, form.value.username)
+    else localStorage.removeItem(REMEMBER_KEY)
     // force：同会话换账号登录时必须重拉菜单并重建路由，不能复用上一用户的
     await loadDynamicRoutes(true)
     ElMessage.success('登录成功')
@@ -152,6 +168,8 @@ async function onLogin() {
 .login-btn { width: 100%; margin-top: 8px; height: 44px; font-size: 16px; font-weight: 600; }
 .captcha-row { display: flex; gap: 10px; width: 100%; align-items: center; }
 .captcha-row .el-input { flex: 1; }
+.remember-row { margin-bottom: 0; }
+.remember-row :deep(.el-form-item__content) { justify-content: flex-start; }
 .captcha-img { height: 40px; width: 120px; border-radius: 6px; cursor: pointer; flex-shrink: 0; border: 1px solid var(--el-border-color); }
 .captcha-placeholder { display: grid; place-items: center; color: var(--c-text-4); font-size: 12px; background: var(--el-fill-color-light); }
 .hint { text-align: center; color: var(--c-text-4); font-size: 12px; margin-top: 16px; }
