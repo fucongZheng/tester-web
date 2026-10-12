@@ -24,3 +24,11 @@ Thumbs.db
 .tmp-*/
 .playwright-cli/
 /backend/uploads/
+
+# playwright 页面快照等根目录临时 yml
+/*.yml
+
+# 本地文档（测试用例/报告/UI规范）
+/*.xlsx
+/*.docx
+/UI规范/
