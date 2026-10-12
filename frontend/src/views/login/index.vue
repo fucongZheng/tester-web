@@ -99,8 +99,13 @@ async function onLogin() {
     await loadDynamicRoutes(true)
     ElMessage.success('登录成功')
     router.push(firstMenuPath(userStore.menus) || '/')
-  } catch {
+  } catch (e) {
     // 错误提示由 request 拦截器统一弹出；验证码已被消费，刷新后重输
+    // 后端重启会更换 RSA 密钥对：「解密失败」说明缓存的公钥过期，刷新后重试即可
+    if ((e?.response?.data?.detail || '').includes('解密失败')) {
+      await fetchRsaKey(true)
+      ElMessage.info('安全密钥已更新，请再次点击登录')
+    }
   } finally {
     loading.value = false
     loadCaptcha()

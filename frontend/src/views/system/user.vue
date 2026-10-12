@@ -103,8 +103,17 @@ async function save() {
     }
     payload.password_enc = enc
   }
-  if (form.value.id) await request.put(`/users/${form.value.id}`, payload)
-  else await request.post('/users', payload)
+  try {
+    if (form.value.id) await request.put(`/users/${form.value.id}`, payload)
+    else await request.post('/users', payload)
+  } catch (e) {
+    // 后端重启换 RSA 密钥对后，缓存的公钥会导致解密失败：刷新后提示重试
+    if ((e?.response?.data?.detail || '').includes('解密失败')) {
+      await fetchRsaKey(true)
+      ElMessage.info('安全密钥已更新，请重新保存')
+    }
+    return
+  }
   ElMessage.success('保存成功'); dialog.value = false; load()
 }
 async function del(row) {
