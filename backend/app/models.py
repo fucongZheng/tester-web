@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from sqlalchemy import (Column, Integer, String, Text, DateTime, ForeignKey,
-                        Boolean, func)
+                        Boolean, UniqueConstraint, func)
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -124,6 +124,11 @@ class Module(Base):
 
 class Requirement(Base):
     __tablename__ = "requirement"
+    # 同步需求按 (source_system, source_id) 幂等 upsert，唯一索引防并发/多副本重复建档；
+    # 本地手工需求无来源（source_id 为 NULL，唯一索引不约束 NULL）。存量迁移见 seed.py
+    __table_args__ = (
+        UniqueConstraint("source_system", "source_id", name="uq_requirement_source"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     req_no = Column(String(32), unique=True, default="")
     name = Column(String(255), nullable=False)
@@ -137,7 +142,7 @@ class Requirement(Base):
     attachments = Column(Text, default="[]")  # JSON [{name,url,size}]
     # 需求同步：来源系统标识 + 源系统内的需求 id（xuqiu 的 req_xxx），幂等 upsert 靠它
     source_system = Column(String(32), default="")
-    source_id = Column(String(64), default="")
+    source_id = Column(String(64), nullable=True, default=None)
     created_at = Column(DateTime, default=now)
     updated_at = Column(DateTime, default=now, onupdate=now)
 

@@ -9,8 +9,11 @@
 - 幂等：按 (source_system, source_id) 定位；字段值没变就不动，重复执行结果一致。
 """
 import json
+import threading
 import urllib.request
 
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .ai_prompts import MODE_LABELS, build_user_prompt
@@ -109,7 +112,21 @@ def _ai_gen_cases(db: Session, req: Requirement) -> tuple[int, str]:
     return len(rows), f"AI 生成用例 {len(rows)} 条（{'，'.join(notes)}）"
 
 
+# 同步防重入：进程内非阻塞锁（部署约束为单 worker/单副本，见 DEPLOY.md）。
+# 多副本场景由 requirement 的 uq_requirement_source 唯一索引兜底防重复建档。
+_sync_lock = threading.Lock()
+
+
 def run_sync(db: Session, trigger: str = "manual") -> dict:
+    if not _sync_lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="已有同步任务在执行中，请稍后再试")
+    try:
+        return _run_sync(db, trigger)
+    finally:
+        _sync_lock.release()
+
+
+def _run_sync(db: Session, trigger: str) -> dict:
     stats = {"created_count": 0, "updated_count": 0, "skipped_count": 0,
              "missing_count": 0, "failed_count": 0, "cases_count": 0}
     detail: list[str] = []
@@ -139,6 +156,7 @@ def run_sync(db: Session, trigger: str = "manual") -> dict:
                 .first()
             )
             project_id, version_id = _resolve_placement(db, r, ver_dates)
+            created = False
             if local is None:
                 local = Requirement(
                     name=name,
@@ -151,7 +169,20 @@ def run_sync(db: Session, trigger: str = "manual") -> dict:
                     source_id=rid,
                 )
                 db.add(local)
-                db.flush()
+                try:
+                    db.flush()
+                    created = True
+                except IntegrityError:
+                    # 另一路（多副本/并发）已建档，唯一索引兜底——转为按已存在更新
+                    db.rollback()
+                    local = (
+                        db.query(Requirement)
+                        .filter(Requirement.source_system == SOURCE, Requirement.source_id == rid)
+                        .first()
+                    )
+                    if local is None:
+                        continue
+            if created:
                 local.req_no = gen_code("REQ", local.id)
                 db.commit()
                 stats["created_count"] += 1

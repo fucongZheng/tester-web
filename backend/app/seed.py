@@ -154,10 +154,33 @@ def _sync_menus(db):
     return [m.id for m in db.query(SysMenu).filter(SysMenu.visible == 1).all()]
 
 
+def _ensure_requirement_source_unique(db):
+    """同步来源 (source_system, source_id) 唯一化：空值置 NULL 绕开唯一索引，重复保留最新一条。"""
+    from sqlalchemy import text
+    sqls = [
+        # 手工需求无来源，空串统一置 NULL（唯一索引不约束 NULL）
+        "UPDATE requirement SET source_id = NULL WHERE source_id = ''",
+        # 同一来源重复建档（历史并发双跑）保留 id 最大（最新）一条
+        "UPDATE requirement r JOIN (SELECT source_id, MAX(id) keep_id FROM requirement "
+        "WHERE source_system = 'xuqiu' AND source_id IS NOT NULL "
+        "GROUP BY source_id HAVING COUNT(*) > 1) d "
+        "ON r.source_system = 'xuqiu' AND r.source_id = d.source_id AND r.id <> d.keep_id "
+        "SET r.source_id = NULL",
+        "CREATE UNIQUE INDEX uq_requirement_source ON requirement (source_system, source_id)",
+    ]
+    for sql in sqls:
+        try:
+            db.execute(text(sql))
+            db.commit()
+        except Exception:
+            db.rollback()  # 索引已存在等场景，幂等跳过
+
+
 def seed():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     _ensure_columns(db)
+    _ensure_requirement_source_unique(db)
     _migrate_flow_stage_numbers(db)
     _sync_completed_flow_versions(db)
     try:

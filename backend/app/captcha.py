@@ -2,6 +2,7 @@
 import base64
 import io
 import random
+import secrets
 import os
 import time
 import uuid
@@ -10,8 +11,16 @@ from threading import Lock
 from PIL import Image, ImageDraw, ImageFont
 
 CAPTCHA_TTL = 300  # 有效期 5 分钟
-# 仅供自动化测试（e2e 脚本无法识图）：设置后验证码固定为该值，且接口返回 dev_code 提示
-CAPTCHA_FIXED_CODE = os.getenv("CAPTCHA_FIXED_CODE", "").strip()
+# 仅供自动化测试（e2e 脚本无法识图）：设置后验证码固定为该值，且接口返回 dev_code 提示。
+# 生产环境强制忽略，防止误配导致验证码可绕过。
+from .config import settings  # noqa: E402
+
+if (settings.ENV or "").lower() == "production" and os.getenv("CAPTCHA_FIXED_CODE", "").strip():
+    import logging
+    logging.getLogger(__name__).warning("生产环境忽略 CAPTCHA_FIXED_CODE 配置")
+    CAPTCHA_FIXED_CODE = ""
+else:
+    CAPTCHA_FIXED_CODE = os.getenv("CAPTCHA_FIXED_CODE", "").strip()
 
 _CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # 去掉易混淆的 I O 0 1
 _WIDTH, _HEIGHT, _LEN = 132, 44, 4
@@ -41,7 +50,7 @@ def _load_font(size=30):
 def _random_code():
     if CAPTCHA_FIXED_CODE:
         return CAPTCHA_FIXED_CODE
-    return "".join(random.choices(_CHARS, k=_LEN))
+    return "".join(secrets.choice(_CHARS) for _ in range(_LEN))
 
 
 def _cleanup(now):

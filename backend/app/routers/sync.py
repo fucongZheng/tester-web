@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import get_current_user, require_admin
 from ..helpers import paginate, row_to_dict
 from ..models import SyncLog
 from ..sync_service import run_sync
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/sync", tags=["需求同步"])
 
 
 @router.post("/run")
-def trigger_sync(db: Session = Depends(get_db), _=Depends(get_current_user)):
+def trigger_sync(db: Session = Depends(get_db), _=Depends(require_admin)):
     result = run_sync(db, trigger="manual")
     if not result.get("ok"):
         raise HTTPException(status_code=502, detail=result.get("error", "同步失败"))

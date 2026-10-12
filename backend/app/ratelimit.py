@@ -33,9 +33,10 @@ LOGIN_LOCK_SEC = 15 * 60
 
 
 def client_ip(request: Request) -> str:
-    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    # XFF 前面的段可被客户端伪造，取最后一跳（由最近的可信代理 nginx/slb 追加的真实来源）
+    forwarded = [p.strip() for p in (request.headers.get("x-forwarded-for") or "").split(",") if p.strip()]
     if forwarded:
-        return forwarded
+        return forwarded[-1]
     return request.client.host if request.client else "unknown"
 
 

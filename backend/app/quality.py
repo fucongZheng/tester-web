@@ -1,6 +1,8 @@
 """质量快照：把看板/覆盖/流程/BUG 收成一份给 AI 解读的 JSON。"""
 from datetime import datetime
 
+from sqlalchemy import func
+
 from .models import (Project, Version, Requirement, TestCase, Execution, Bug,
                      FlowInstance, Handover, LaunchRequest, ReviewRecord)
 from .flow_stages import stage_label as _stage_label, STAGE_NO
@@ -56,13 +58,21 @@ def _days_ago(dt):
     return max(0, (datetime.now() - dt).days)
 
 
-def _latest_execs(execs):
-    latest = {}
-    for e in execs:
-        prev = latest.get(e.case_id)
-        if not prev or (e.id or 0) > (prev.id or 0):
-            latest[e.case_id] = e
-    return latest
+def _latest_exec_results(db, pid=0, vid=0):
+    """每个用例最新一条执行记录的结果 {case_id: result}。
+
+    SQL 聚合取每 case 的 MAX(id) 再取结果，避免把整张 Execution 表拉进内存。
+    """
+    q = db.query(func.max(Execution.id)).join(TestCase, TestCase.id == Execution.case_id)
+    if pid:
+        q = q.filter(TestCase.project_id == pid)
+    if vid:
+        q = q.filter(TestCase.version_id == vid)
+    latest_ids = [x[0] for x in q.group_by(Execution.case_id).all()]
+    if not latest_ids:
+        return {}
+    return dict(db.query(Execution.case_id, Execution.result)
+                .filter(Execution.id.in_(latest_ids)).all())
 
 
 def _bug_open(bugs):
@@ -127,13 +137,11 @@ def build_snapshot(db, project_id=0, version_id=0):
         rq, cq, bq = rq.filter(Requirement.version_id == vid), cq.filter(TestCase.version_id == vid), bq.filter(Bug.version_id == vid)
     reqs, cases, bugs = rq.all(), cq.all(), bq.all()
 
-    case_ids = [c.id for c in cases]
-    execs = db.query(Execution).filter(Execution.case_id.in_(case_ids)).all() if case_ids else []
-    latest = _latest_execs(execs)
+    latest_result = _latest_exec_results(db, pid, vid)
     exec_result = {"通过": 0, "失败": 0, "阻塞": 0, "跳过": 0, "未执行": 0}
-    for e in latest.values():
-        exec_result[e.result] = exec_result.get(e.result, 0) + 1
-    not_executed = exec_result.get("未执行", 0) + max(0, len(cases) - len(latest))
+    for result in latest_result.values():
+        exec_result[result] = exec_result.get(result, 0) + 1
+    not_executed = exec_result.get("未执行", 0) + max(0, len(cases) - len(latest_result))
     executed_total = len(cases) - not_executed
     pass_count = exec_result.get("通过", 0)
     pass_rate = _pct(pass_count, executed_total)
@@ -149,8 +157,7 @@ def build_snapshot(db, project_id=0, version_id=0):
 
     unexec_cases = []
     for c in cases:
-        e = latest.get(c.id)
-        if not e or e.result == "未执行":
+        if latest_result.get(c.id) in (None, "未执行"):
             unexec_cases.append(c)
     unexec_items = [_item("case", c.case_no, c.title, id=c.id, priority=c.priority,
                           project_id=pid, version_id=vid)

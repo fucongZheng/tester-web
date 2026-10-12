@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import SysUser, Handover
-from ..security import hash_password
+from ..security import hash_password, rsa_decrypt
 from ..deps import get_current_user, require_admin, require_password
 from ..helpers import row_to_dict, paginate
 
@@ -20,7 +20,7 @@ def all_users(db: Session = Depends(get_db), _: SysUser = Depends(get_current_us
 
 @router.get("")
 def list_users(page: int = 1, size: int = 10, keyword: str = "",
-               db: Session = Depends(get_db), _: SysUser = Depends(get_current_user)):
+               db: Session = Depends(get_db), _: SysUser = Depends(require_admin)):
     q = db.query(SysUser)
     if keyword:
         q = q.filter(SysUser.username.like(f"%{keyword}%") | SysUser.real_name.like(f"%{keyword}%"))
@@ -34,13 +34,24 @@ def list_users(page: int = 1, size: int = 10, keyword: str = "",
     return {"items": data, "total": total}
 
 
+def _resolve_password(payload: dict, required: bool) -> str:
+    """优先取 RSA 加密密文 password_enc，兼容明文 password（前端全部改造前的过渡）。"""
+    enc = payload.get("password_enc")
+    if enc:
+        pwd = rsa_decrypt(enc)
+        if pwd is None:
+            raise HTTPException(status_code=400, detail="密码解密失败，请刷新页面重试")
+        return require_password(pwd, required=required)
+    return require_password(payload.get("password"), required=required)
+
+
 @router.post("")
 def create_user(payload: dict, db: Session = Depends(get_db), _: SysUser = Depends(require_admin)):
     if db.query(SysUser).filter(SysUser.username == payload.get("username")).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
     u = SysUser(
         username=payload.get("username"),
-        password=hash_password(require_password(payload.get("password"), required=True)),
+        password=hash_password(_resolve_password(payload, required=True)),
         real_name=payload.get("real_name", ""),
         email=payload.get("email", ""),
         phone=payload.get("phone", ""),
@@ -60,8 +71,8 @@ def update_user(uid: int, payload: dict, db: Session = Depends(get_db), _: SysUs
     for k in ("real_name", "email", "phone", "role_id", "status"):
         if k in payload:
             setattr(u, k, payload[k])
-    if payload.get("password"):
-        pwd = require_password(payload["password"], required=False)
+    if payload.get("password_enc") or payload.get("password"):
+        pwd = _resolve_password(payload, required=False)
         if pwd:
             u.password = hash_password(pwd)
     db.commit()

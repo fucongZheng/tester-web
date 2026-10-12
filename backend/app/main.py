@@ -1,8 +1,10 @@
 """FastAPI 应用入口"""
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.background import BackgroundTask
 
 from .config import WEAK_SECRET_KEYS, settings
 from .database import SessionLocal
@@ -49,21 +51,30 @@ app.add_middleware(
 async def op_log(request: Request, call_next):
     response = await call_next(request)
     if request.method in ("POST", "PUT", "DELETE") and request.url.path.startswith("/api"):
-        try:
-            db = SessionLocal()
-            from .security import decode_token
-            username = ""
-            auth = request.headers.get("authorization", "")
-            if auth.startswith("Bearer "):
-                payload = decode_token(auth[7:])
-                username = payload.get("username", "") if payload else ""
-            db.add(OperationLog(username=username, method=request.method,
-                                path=request.url.path))
-            db.commit()
-            db.close()
-        except Exception:
-            pass
+        # 写库挪到响应发送后的后台任务（sync 函数自动进线程池），不阻塞事件循环
+        response.background = BackgroundTask(
+            _write_op_log, request.method, request.url.path,
+            request.headers.get("authorization", ""),
+        )
     return response
+
+
+def _write_op_log(method: str, path: str, auth_header: str):
+    """落一条操作日志。失败只记日志，不影响主流程。"""
+    db = SessionLocal()
+    try:
+        from .security import decode_token
+        username = ""
+        if auth_header.startswith("Bearer "):
+            payload = decode_token(auth_header[7:])
+            username = payload.get("username", "") if payload else ""
+        db.add(OperationLog(username=username, method=method, path=path))
+        db.commit()
+    except Exception:
+        logging.exception("操作日志写入失败: %s %s", method, path)
+        db.rollback()
+    finally:
+        db.close()
 
 
 @app.get("/")

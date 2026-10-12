@@ -129,6 +129,36 @@ def _current_stage_record(db, inst):
     ).order_by(FlowStage.id.desc()).first()
 
 
+def _case_names(db, case_ids):
+    """{id: (case_no, title)}，批量取用例编号/标题，替代逐条查。"""
+    if not case_ids:
+        return {}
+    rows = (db.query(TestCase.id, TestCase.case_no, TestCase.title)
+            .filter(TestCase.id.in_(case_ids)).all())
+    return {cid: (no or "", t or "") for cid, no, t in rows}
+
+
+def _unexec_labels(db, case_ids):
+    """返回套件内未执行用例的标签列表（批量查询，替代逐用例两次查库的 N+1）。"""
+    if not case_ids:
+        return []
+    rows = (db.query(Execution.case_id, Execution.result)
+            .filter(Execution.case_id.in_(case_ids))
+            .order_by(Execution.id.desc()).all())
+    latest = {}
+    for cid, result in rows:
+        if cid not in latest:
+            latest[cid] = result
+    names = _case_names(db, [cid for cid in case_ids
+                             if latest.get(cid) in (None, "未执行")])
+    labels = []
+    for cid in case_ids:
+        if latest.get(cid) in (None, "未执行"):
+            no, title = names.get(cid, ("", ""))
+            labels.append((no or title) or str(cid))
+    return labels
+
+
 def _ensure_suite_executed(db, inst, suite_type: str):
     """指定类型套件必须存在，且套件内用例全部已执行。"""
     suites = db.query(TestSuite).filter(
@@ -148,11 +178,7 @@ def _ensure_suite_executed(db, inst, suite_type: str):
         if not ids:
             empty_suites.append(s.name)
             continue
-        for cid in ids:
-            latest = db.query(Execution).filter(Execution.case_id == cid).order_by(Execution.id.desc()).first()
-            if not latest or latest.result == "未执行":
-                case = db.query(TestCase).filter(TestCase.id == cid).first()
-                pending.append(f"{s.name}/{case.case_no or case.title if case else cid}")
+        pending.extend(f"{s.name}/{label}" for label in _unexec_labels(db, ids))
     if empty_suites:
         raise HTTPException(
             status_code=400,
@@ -202,13 +228,7 @@ def _gate_dev_handover(db, inst):
     if h.suite_id:
         suite = db.query(TestSuite).filter(TestSuite.id == h.suite_id).first()
         if suite:
-            ids = parse_id_list(suite.case_ids)
-            pending = []
-            for cid in ids:
-                latest = db.query(Execution).filter(Execution.case_id == cid).order_by(Execution.id.desc()).first()
-                if not latest or latest.result == "未执行":
-                    case = db.query(TestCase).filter(TestCase.id == cid).first()
-                    pending.append(case.case_no or case.title if case else str(cid))
+            pending = _unexec_labels(db, parse_id_list(suite.case_ids))
             if pending:
                 sample = "、".join(pending[:8])
                 more = f" 等{len(pending)}条" if len(pending) > 8 else ""

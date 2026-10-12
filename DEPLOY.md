@@ -162,7 +162,9 @@ Group=www-data
 WorkingDirectory=/opt/tester/backend
 Environment=PATH=/opt/tester/backend/.venv/bin
 EnvironmentFile=/opt/tester/backend/.env
-ExecStart=/opt/tester/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+# 必须单 worker：图形验证码 / 登录 RSA 私钥 / 限流锁定均为进程内存态（app/captcha.py、app/security.py、app/ratelimit.py），
+# 多 worker 时请求落到不同进程会导致验证码校验失败、RSA 解密失败。扩多 worker/多副本前需先迁 Redis 等共享存储。
+ExecStart=/opt/tester/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=always
 RestartSec=5
 

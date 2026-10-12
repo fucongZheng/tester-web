@@ -13,18 +13,22 @@ RESULTS = ["通过", "失败", "阻塞", "跳过", "未执行"]
 
 
 @router.get("")
-def list_executions(case_id: int = 0, db: Session = Depends(get_db), _=Depends(get_current_user)):
+def list_executions(case_id: int = 0, page: int = 1, size: int = 50,
+                    db: Session = Depends(get_db), _=Depends(get_current_user)):
+    # 无 case_id 时是全量查询（增长最快的表），强制分页；单 case 的历史记录默认 50 条足够
     q = db.query(Execution)
     if case_id:
         q = q.filter(Execution.case_id == case_id)
-    items = q.order_by(Execution.id.desc()).all()
+    total = q.count()
+    items = (q.order_by(Execution.id.desc())
+             .offset((page - 1) * size).limit(size).all())
     data = []
     for e in items:
         d = row_to_dict(e)
         d["case_title"] = e.case.title if e.case else ""
         d["case_no"] = e.case.case_no if e.case else ""
         data.append(d)
-    return {"items": data, "total": len(data)}
+    return {"items": data, "total": total}
 
 
 @router.get("/options")

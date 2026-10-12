@@ -97,6 +97,9 @@ def _file_response(path: Path):
 async def upload_file(file: UploadFile = File(...), _=Depends(get_current_user)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名不能为空")
+    # 表单解析阶段已知的 size 先行拒绝，避免恶意大文件整读进内存
+    if file.size is not None and file.size > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="文件不能超过 20MB")
     raw = await file.read()
     if len(raw) > MAX_SIZE:
         raise HTTPException(status_code=400, detail="文件不能超过 20MB")

@@ -117,7 +117,10 @@ def strip_id_from_json_column(db, model, column_name, rid):
         rid = int(rid)
     except (TypeError, ValueError):
         return
-    for row in db.query(model).all():
+    # like 预筛缩小范围再逐行确认（JSON 串里的数字可能跨字段误命中，仍需 parse 校验）
+    col = getattr(model, column_name)
+    rows = db.query(model).filter(col.like(f'%{rid}%')).all()
+    for row in rows:
         ids = parse_id_list(getattr(row, column_name))
         if rid in ids:
             setattr(row, column_name, json.dumps([x for x in ids if x != rid]))
